@@ -1,0 +1,8 @@
+.venv
+.env
+.ropeproject
+
+__pycache__/
+
+# remove later
+training/
