@@ -6,3 +6,4 @@ __pycache__/
 
 # remove later
 training/
+data/

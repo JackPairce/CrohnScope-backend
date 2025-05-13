@@ -1,3 +1,6 @@
+include .env
+export
+
 venv := .venv
 python := $(venv)/bin/python
 pip := $(venv)/bin/pip
@@ -11,15 +14,32 @@ install:
 	@$(python) -m ipykernel install --user --name=my-venv --display-name "Python (.venv)"
 	@$(pip) install -r requirements.txt
 
-dev:
-	@$(python) -m uvicorn app.main:app --reload
+dev: format
+	@$(python) -m uvicorn app.main:app --reload --host $(HOST) --port $(PORT)
 
 run:
-	@$(python) -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+	@$(python) -m uvicorn app.main:app --host $(HOST) --port $(PORT)
 
 freeze:
 	@$(pip) freeze > requirements.txt
 
-lint:
+format:
 	@$(python) -m black app
+
+lint: format
 	@$(python) -m flake8 app
+
+add:
+	@$(pip) install $(package)
+	@$(pip) freeze > requirements.txt
+	@echo "✅ Package '$(package)' added and requirements.txt updated."
+
+remove:
+	@$(pip) uninstall -y $(package)
+	@$(pip) freeze > requirements.txt
+	@echo "🗑️ Package '$(package)' removed and requirements.txt updated."
+
+upgrade:
+	@$(pip) list --outdated --format=freeze | cut -d = -f 1 | xargs -n1 $(pip) install -U
+	@$(pip) freeze > requirements.txt
+	@echo "⬆️ All packages upgraded and requirements.txt updated."
