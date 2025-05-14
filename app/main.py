@@ -55,7 +55,7 @@ def populate_database():
         image_path = os.path.join(images_path, image_file)
         if os.path.isfile(image_path):
             # Create an Image record
-            image = Image(filename=image_file, diagnosis=DiagnosisEnum.unknown)
+            image = Image(filename=image_file, img_path=image_path, diagnosis=DiagnosisEnum.unknown)
             session.add(image)
             session.commit()
 

@@ -21,6 +21,7 @@ class Image(Base):
 
     id = mapped_column(Integer, primary_key=True, index=True)
     filename = mapped_column(String, unique=True, nullable=False)
+    img_path = mapped_column(Text, nullable=False)
     diagnosis = mapped_column(Enum(DiagnosisEnum), default=DiagnosisEnum.unknown)
     phase = mapped_column(Integer, nullable=True)
 

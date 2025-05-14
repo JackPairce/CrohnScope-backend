@@ -10,6 +10,8 @@ import numpy as np
 import cv2
 import base64
 
+from utils.converters import ToBase64
+
 router = APIRouter()
 
 
@@ -24,14 +26,15 @@ def get_model_status():
     return {"status": "data service is ready"}
 
 @router.get("/all/{page}")
-def get_images(page: int) -> dict[str, list[ApiImage]]:
+def get_images(page: int) :
     session = SessionLocal()
     try:
         page_size = 10
         offset = (page - 1) * page_size
-        db_images = session.query(Image).offset(offset).limit(page_size).all()
-        api_images = [ApiImage(id=img.id, filename=img.filename, src="", is_done=False) for img in db_images]
-        return {"images": api_images}
+        db_images_count = session.query(Image).count()
+        db_images = session.query(Image).order_by(Image.filename).offset(offset).limit(page_size).all()
+        api_images = [ApiImage(id=img.id, filename=img.filename, src=ToBase64(img.img_path), is_done=False) for img in db_images]
+        return {"images": api_images, "page": page, "total": db_images_count}   
     finally:
         session.close()
 
@@ -101,9 +104,6 @@ def get_image(image_id: int):
         if not os.path.exists(image_path):
             raise HTTPException(status_code=404, detail="Image file not found")
 
-        with open(image_path, "rb") as img_file:
-            base64_image = base64.b64encode(img_file.read()).decode("utf-8")
-
         # Create a black mask for the image
         img = cv2.imread(image_path)
         height, width, _ = img.shape
@@ -124,7 +124,7 @@ def get_image(image_id: int):
         api_image = ApiImage(
             id=image.id,
             filename=image.filename,
-            src=f"data:image/png;base64,{base64_image}",
+            src=ToBase64(image_path),
             is_done=False,
         )
         api_mask = ApiMask(
