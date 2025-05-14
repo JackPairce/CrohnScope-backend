@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Enum
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy import Integer, String, Text, ForeignKey, Enum
+from sqlalchemy.orm import relationship, declarative_base, mapped_column
 import enum
 
 Base = declarative_base()
@@ -19,10 +19,10 @@ class HealthStatusEnum(str, enum.Enum):
 class Image(Base):
     __tablename__ = "images"
 
-    id = Column(Integer, primary_key=True, index=True)
-    filename = Column(String, unique=True, nullable=False)
-    diagnosis = Column(Enum(DiagnosisEnum), default=DiagnosisEnum.unknown)
-    phase = Column(Integer, nullable=True)
+    id = mapped_column(Integer, primary_key=True, index=True)
+    filename = mapped_column(String, unique=True, nullable=False)
+    diagnosis = mapped_column(Enum(DiagnosisEnum), default=DiagnosisEnum.unknown)
+    phase = mapped_column(Integer, nullable=True)
 
     masks = relationship("Mask", back_populates="image", cascade="all, delete")
 
@@ -30,8 +30,8 @@ class Image(Base):
 class Cell(Base):
     __tablename__ = "cells"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False, unique=True)
+    id = mapped_column(Integer, primary_key=True, index=True)
+    name = mapped_column(String, nullable=False, unique=True)
 
     masks = relationship("Mask", back_populates="cell")
 
@@ -39,10 +39,12 @@ class Cell(Base):
 class Mask(Base):
     __tablename__ = "masks"
 
-    id = Column(Integer, primary_key=True, index=True)
-    image_id = Column(Integer, ForeignKey("images.id"), nullable=False)
-    mask_path = Column(Text, nullable=False)
-    cell_id = Column(Integer, ForeignKey("cells.id"), nullable=True)
+    id = mapped_column(Integer, primary_key=True, index=True)
+    image_id = mapped_column(Integer, ForeignKey("images.id"), nullable=False)
+    mask_path = mapped_column(Text, nullable=False)
+    cell_id = mapped_column(Integer, ForeignKey("cells.id"), nullable=True)
+    is_mask_done = mapped_column(Integer, default=0)  # 0 for False, 1 for True
+    is_annotation_done = mapped_column(Integer, default=0)  # 0 for False, 1 for True
 
     image = relationship("Image", back_populates="masks")
     cell = relationship("Cell", back_populates="masks")

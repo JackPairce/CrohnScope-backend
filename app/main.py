@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.db.models import Base, Image, Cell, DiagnosisEnum, HealthStatusEnum, Mask
 import os
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
@@ -19,9 +20,26 @@ app.include_router(ai.router, prefix="/ai")
 app.include_router(data.router, prefix="/data")
 app.include_router(image.router, prefix="/image")
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.on_event("startup")
 def startup():
+    # check if the database is up and running if not, crash the server
+    try:
+        with engine.connect() as connection:
+            pass
+    except Exception as e:
+        print(f"Database connection error: {e}")
+        raise
+
     # Drop all tables and reinitialize the database
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
@@ -48,7 +66,9 @@ def populate_database():
                     mask_path = os.path.join(image_masks_path, mask_file)
                     if os.path.isfile(mask_path):
                         # Check if the cell exists, if not, create it
-                        cell_name = os.path.splitext(mask_file)[0]  # Assuming mask file name represents cell name
+                        cell_name = os.path.splitext(mask_file)[
+                            0
+                        ]  # Assuming mask file name represents cell name
                         cell = session.query(Cell).filter_by(name=cell_name).first()
                         if not cell:
                             cell = Cell(name=cell_name)
@@ -57,11 +77,8 @@ def populate_database():
 
                         # Create a Mask record
                         mask = Mask(
-                            image_id=image.id,
-                            mask_path=mask_path,
-                            cell_id=cell.id
+                            image_id=image.id, mask_path=mask_path, cell_id=cell.id
                         )
                         session.add(mask)
     session.commit()
     session.close()
-
