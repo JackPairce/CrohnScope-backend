@@ -24,16 +24,25 @@ class Image(Base):
     diagnosis = Column(Enum(DiagnosisEnum), default=DiagnosisEnum.unknown)
     phase = Column(Integer, nullable=True)
 
-    cells = relationship("Cell", back_populates="image", cascade="all, delete")
+    masks = relationship("Mask", back_populates="image", cascade="all, delete")
 
 
 class Cell(Base):
     __tablename__ = "cells"
 
     id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True)
+
+    masks = relationship("Mask", back_populates="cell")
+
+
+class Mask(Base):
+    __tablename__ = "masks"
+
+    id = Column(Integer, primary_key=True, index=True)
     image_id = Column(Integer, ForeignKey("images.id"), nullable=False)
     mask_path = Column(Text, nullable=False)
-    cell_type = Column(String, nullable=True)  # granuloma, ulcer, etc.
-    health_status = Column(Enum(HealthStatusEnum), default=HealthStatusEnum.healthy)
+    cell_id = Column(Integer, ForeignKey("cells.id"), nullable=True)
 
-    image = relationship("Image", back_populates="cells")
+    image = relationship("Image", back_populates="masks")
+    cell = relationship("Cell", back_populates="masks")

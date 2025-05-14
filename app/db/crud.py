@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from . import models
 
+
 class CRUDBase:
     def __init__(self, model):
         """CRUD object with default methods to Create, Read, Update, Delete (CRUD).
@@ -22,7 +23,9 @@ class CRUDBase:
         return db_obj
 
     def update(self, db: Session, db_obj, obj_in):
-        obj_data = obj_in.dict(exclude_unset=True)  # Assuming obj_in is a Pydantic model
+        obj_data = obj_in.dict(
+            exclude_unset=True
+        )  # Assuming obj_in is a Pydantic model
         for field, value in obj_data.items():
             setattr(db_obj, field, value)
         db.add(db_obj)
