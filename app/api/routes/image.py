@@ -34,6 +34,39 @@ class ImageListResponse(TypedDict):
     total: int
 
 
+def get_images_by_done_status(
+    session: Session, done: int, offset: int = 0, limit: int = 10
+):
+    base_query = session.query(Image.id).outerjoin(Mask).group_by(Image.id)
+
+    if done == 1:
+        filtered_query = base_query.having(
+            func.count(Mask.id) > 0, func.count(Mask.id) == func.sum(Mask.is_mask_done)
+        )
+    else:
+        filtered_query = base_query.having(
+            (func.count(Mask.id) == 0)
+            | (func.count(Mask.id) != func.sum(Mask.is_mask_done))
+        )
+
+    subquery = filtered_query.subquery()
+
+    # Get paginated images
+    images = (
+        session.query(Image)
+        .join(subquery, Image.id == subquery.c.id)
+        .order_by(Image.filename)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    # Get total count
+    total_count = session.query(func.count()).select_from(subquery).scalar()
+
+    return images, total_count
+
+
 @router.get("/all/{page}")
 def get_images(
     page: int, done: Optional[Literal["0", "1"]] = Query(None)
@@ -41,19 +74,13 @@ def get_images(
     session = SessionLocal()
     try:
         page_size = 10
-        offset = (page - 1) * page_size
-        db_query = session.query(distinct(Mask.image_id)).filter(
-            Mask.is_mask_done == (int(done) if (done) else 0)
+        db_images, db_count = get_images_by_done_status(
+            session,
+            (int(done) if done else 0),
+            offset=(page - 1) * page_size,
+            limit=page_size,
         )
 
-        db_images = (
-            session.query(Image)
-            .filter(Image.id.in_([id[0] for id in db_query.all()]))
-            .order_by(Image.filename)
-            .offset(offset)
-            .limit(page_size)
-            .all()
-        )
         api_images = [
             ApiImage(
                 id=img.id,
@@ -63,7 +90,7 @@ def get_images(
             )
             for img in db_images
         ]
-        return {"images": api_images, "page": page, "total": db_query.count()}
+        return {"images": api_images, "page": page, "total": db_count}
     finally:
         session.close()
 
@@ -118,5 +145,3 @@ def delete_image(image_id: int):
         return {"message": "Image deleted successfully"}
     finally:
         session.close()
-
-

@@ -42,9 +42,10 @@ class SaveMaskResponse(TypedDict):
     cell_id: int
     src: str
 
+
 @router.post("/save/{image_id}")
-def save_masks(image_id: int, body = Body(...)):
-    masks : List[SaveMaskResponse] = body
+def save_masks(image_id: int, body=Body(...)):
+    masks: List[SaveMaskResponse] = body
     session = SessionLocal()
     try:
         # Find the image in the database
@@ -54,6 +55,7 @@ def save_masks(image_id: int, body = Body(...)):
             raise HTTPException(status_code=404, detail="Image not found")
         # Save each mask
         for mask in masks:
+            print(mask)
             cell_name = next(
                 (cell.name for cell in cells if cell.id == mask["cell_id"]), None
             )
@@ -65,21 +67,36 @@ def save_masks(image_id: int, body = Body(...)):
                 name,
                 cell_name + "." + mimetype,
             )
-            
-            base64_to_file(mask["src"],mask_path)
+
+            base64_to_file(mask["src"], mask_path)
 
             # Update the database
-            db_mask = session.query(Mask).filter_by(id=mask["id"]).first()
+            db_mask = session.query(Mask).filter_by(id=mask.get("id")).first()
             if db_mask:
                 db_mask.mask_path = mask_path
-                db_mask.is_mask_done = 1  # Mark as done
             else:
                 # Add the mask to the database
-                mask_record = Mask(image_id=image_id, mask_path=mask_path, cell_id=mask["cell_id"])
+                mask_record = Mask(
+                    image_id=image_id, mask_path=mask_path, cell_id=mask["cell_id"]
+                )
                 session.add(mask_record)
             session.commit()
 
-        return {"message": "Masks saved successfully"}        
+        return {"message": "Masks saved successfully"}
+    finally:
+        session.close()
+
+
+@router.put("/done/{mask_id}")
+def mask_done(mask_id: int):
+    session = SessionLocal()
+    try:
+        # Update the database
+        db_mask = session.query(Mask).filter_by(id=mask_id).first()
+        if db_mask:
+            db_mask.is_mask_done = 1
+        else:
+            raise ValueError("the mask is not found")
     finally:
         session.close()
 
