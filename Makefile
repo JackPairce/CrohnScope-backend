@@ -15,7 +15,7 @@ install:
 	@$(pip) install -r requirements.txt
 
 dev: format
-	@ENV=dev BASE_URL="http://$(HOST):$(PORT)" $(python) -m uvicorn app.main:app --reload --host $(HOST) --port $(PORT)
+	@ENV=dev BASE_URL="http://$(HOST):$(PORT_DEV)" $(python) -m uvicorn app.main:app --reload --host $(HOST) --port $(PORT_DEV)
 
 run:
 	@$(python) -m uvicorn app.main:app --host $(HOST) --port $(PORT)
