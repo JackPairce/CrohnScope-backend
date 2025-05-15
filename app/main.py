@@ -1,12 +1,19 @@
 from fastapi import FastAPI
-from app.api.routes import ai, data, image
+from app.api.routes import ai, cells, image, mask
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.db.models import Base, Image, Cell, DiagnosisEnum, HealthStatusEnum, Mask
+from app.db.models import Base, Image, Cell, DiagnosisEnum, Mask
 import os
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
+app = FastAPI(
+    title="CrohnScope API",
+    description="API for CrohnScope, a web application for annotating and analyzing medical images.",
+    version="0.1.0",
+    docs_url="/docs",
+    openapi_url="/openapi.json",
+)
+
 
 # Database configuration
 DATABASE_URL = (
@@ -17,8 +24,9 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Include routers
 app.include_router(ai.router, prefix="/ai")
-app.include_router(data.router, prefix="/data")
+app.include_router(mask.router, prefix="/mask")
 app.include_router(image.router, prefix="/image")
+app.include_router(cells.router, prefix="/cells")
 
 # Add CORS middleware
 app.add_middleware(
@@ -55,7 +63,11 @@ def populate_database():
         image_path = os.path.join(images_path, image_file)
         if os.path.isfile(image_path):
             # Create an Image record
-            image = Image(filename=image_file, img_path=image_path, diagnosis=DiagnosisEnum.unknown)
+            image = Image(
+                filename=image_file,
+                img_path=image_path,
+                diagnosis=DiagnosisEnum.unknown,
+            )
             session.add(image)
             session.commit()
 
@@ -74,7 +86,6 @@ def populate_database():
                             cell = Cell(name=cell_name)
                             session.add(cell)
                             session.commit()
-
                         # Create a Mask record
                         mask = Mask(
                             image_id=image.id, mask_path=mask_path, cell_id=cell.id

@@ -1,141 +1,90 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from enum import Enum
-from sqlalchemy.orm import Session
-from app.db.models import Image, Mask, Cell
-from app.db.session import SessionLocal
-from app.types.image import ApiImage, ImageWithMasks, ApiMask
-import os
-import shutil
-import numpy as np
+from email import message
+from typing import Any, List, TypedDict
 import cv2
+from fastapi import APIRouter, Body, HTTPException
+from pydantic import BaseModel
+from app.api.routes.cells import get_cells
+from app.db.models import Image, Mask
+from app.db.session import SessionLocal
+from app.services.image import mask
+from app.types.image import ApiMask
+import os
 import base64
 
-from utils.converters import ToBase64
+from utils.converters import ToBase64, base64_to_file
 
 router = APIRouter()
 
 
-# Helper function to get the next image ID
-def get_next_image_id(session: Session):
-    last_image = session.query(Image).order_by(Image.id.desc()).first()
-    return (last_image.id + 1) if last_image else 1
-
-
-@router.get("/status")
-def get_model_status():
-    return {"status": "data service is ready"}
-
-@router.get("/all/{page}")
-def get_images(page: int) :
+@router.get("/get/{image_id}")
+def get_masks(image_id: int) -> List[ApiMask]:
     session = SessionLocal()
     try:
-        page_size = 10
-        offset = (page - 1) * page_size
-        db_images_count = session.query(Image).count()
-        db_images = session.query(Image).order_by(Image.filename).offset(offset).limit(page_size).all()
-        api_images = [ApiImage(id=img.id, filename=img.filename, src=ToBase64(img.img_path), is_done=False) for img in db_images]
-        return {"images": api_images, "page": page, "total": db_images_count}   
+        # Get all masks for the image
+        masks = session.query(Mask).filter_by(image_id=image_id).all()
+        api_masks = [
+            ApiMask(
+                id=mask.id,
+                image_id=mask.image_id,
+                mask_path=mask.mask_path,
+                src=ToBase64(mask.mask_path),
+                cell_id=mask.cell_id,
+            )
+            for mask in masks
+        ]
+        return api_masks
     finally:
         session.close()
 
-@router.post("/upload")
-def upload_image(file: ApiImage = File(...)):
-    session = SessionLocal()
-    try:
-        # Get the next image ID
-        next_id = get_next_image_id(session)
-        ext = file.filename.split(".")[-1]
-        new_filename = f"{next_id}.{ext}"
-        image_path = os.path.join("data/dataset/images", new_filename)
-        
-        # Save the file
-        with open(image_path, "wb") as buffer:
-            base64_image = file.src.split(",")[1]
-            image_data = base64.b64decode(base64_image)
-            buffer.write(image_data)
 
-        # Add to the database
-        image = Image(filename=new_filename)
-        session.add(image)
-        session.commit()
-        return {"message": "Image uploaded successfully", "id": next_id}
-    finally:
-        session.close()
-    
+class SaveMaskResponse(TypedDict):
+    id: int
+    cell_id: int
+    src: str
 
-@router.delete("/delete/{image_id}")
-def delete_image(image_id: int):
+@router.post("/save/{image_id}")
+def save_masks(image_id: int, body = Body(...)):
+    masks : List[SaveMaskResponse] = body
     session = SessionLocal()
     try:
         # Find the image in the database
         image = session.query(Image).filter_by(id=image_id).first()
+        cells = get_cells()
         if not image:
             raise HTTPException(status_code=404, detail="Image not found")
+        # Save each mask
+        for mask in masks:
+            cell_name = next(
+                (cell.name for cell in cells if cell.id == mask["cell_id"]), None
+            )
+            if cell_name is None:
+                continue
+            name, mimetype = str(image.filename).split(".")
+            mask_path = os.path.join(
+                "data/dataset/masks",
+                name,
+                cell_name + "." + mimetype,
+            )
+            
+            base64_to_file(mask["src"],mask_path)
 
-        # Delete the image file
-        image_path = os.path.join("data/dataset/images", image.filename)
-        if os.path.exists(image_path):
-            os.remove(image_path)
+            # Update the database
+            db_mask = session.query(Mask).filter_by(id=mask["id"]).first()
+            if db_mask:
+                db_mask.mask_path = mask_path
+                db_mask.is_mask_done = 1  # Mark as done
+            else:
+                # Add the mask to the database
+                mask_record = Mask(image_id=image_id, mask_path=mask_path, cell_id=mask["cell_id"])
+                session.add(mask_record)
+            session.commit()
 
-        # Delete associated masks
-        mask_dir = os.path.join("data/dataset/masks", str(image_id))
-        if os.path.exists(mask_dir):
-            shutil.rmtree(mask_dir)
-
-        # Remove from the database
-        session.delete(image)
-        session.commit()
-        return {"message": "Image deleted successfully"}
+        return {"message": "Masks saved successfully"}        
     finally:
         session.close()
 
 
-@router.get("/get/{image_id}", response_model=ImageWithMasks)
-def get_image(image_id: int):
-    session = SessionLocal()
-    try:
-        # Find the image in the database
-        image = session.query(Image).filter_by(id=image_id).first()
-        if not image:
-            raise HTTPException(status_code=404, detail="Image not found")
-
-        # Read and encode the image to base64
-        image_path = os.path.join("data/dataset/images", image.filename)
-        if not os.path.exists(image_path):
-            raise HTTPException(status_code=404, detail="Image file not found")
-
-        # Create a black mask for the image
-        img = cv2.imread(image_path)
-        height, width, _ = img.shape
-        mask = np.zeros((height, width, 3), dtype=np.uint8)
-
-        # Save the mask
-        mask_dir = os.path.join("data/dataset/masks", str(image_id))
-        os.makedirs(mask_dir, exist_ok=True)
-        mask_path = os.path.join(mask_dir, "mask.png")
-        cv2.imwrite(mask_path, mask)
-
-        # Add the mask to the database
-        mask_record = Mask(image_id=image_id, mask_path=mask_path)
-        session.add(mask_record)
-        session.commit()
-
-        # Prepare response
-        api_image = ApiImage(
-            id=image.id,
-            filename=image.filename,
-            src=ToBase64(image_path),
-            is_done=False,
-        )
-        api_mask = ApiMask(
-            id=mask_record.id, image_id=image_id, mask_path=mask_path, src=""
-        )
-        return ImageWithMasks(**api_image.__dict__, masks=[api_mask])
-    finally:
-        session.close()
-
-
-@router.post("/masks/alternate")
+@router.post("/alternate")
 def alternate_masks(image_id: int, mask1: str, mask2: str):
     session = SessionLocal()
     try:

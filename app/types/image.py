@@ -29,3 +29,8 @@ class ApiMask(Mask):
 
 class ImageWithMasks(ApiImage):
     masks: List[ApiMask] = []
+
+
+class ApiCell(BaseModel):
+    id: int
+    name: str

@@ -15,7 +15,7 @@ install:
 	@$(pip) install -r requirements.txt
 
 dev: format
-	@$(python) -m uvicorn app.main:app --reload --host $(HOST) --port $(PORT)
+	@ENV=dev BASE_URL="http://$(HOST):$(PORT)" $(python) -m uvicorn app.main:app --reload --host $(HOST) --port $(PORT)
 
 run:
 	@$(python) -m uvicorn app.main:app --host $(HOST) --port $(PORT)
@@ -27,6 +27,7 @@ format:
 	@$(python) -m black app
 
 lint: format
+	@npx openapi-typescript "http://$(HOST):$(PORT)/openapi.json" -o ../frontend/src/api.d.ts
 	@$(python) -m flake8 app
 
 add:
