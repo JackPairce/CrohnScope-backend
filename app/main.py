@@ -17,7 +17,7 @@ app = FastAPI(
 
 # Database configuration
 DATABASE_URL = (
-    "postgresql://postgres:postgres@127.0.0.1:5432/crohnscope"  # TODO: use env vars
+    "postgresql://postgres:postgres@127.0.0.1:5430/crohnscope"  # TODO: use env vars
 )
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

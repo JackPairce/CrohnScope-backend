@@ -55,7 +55,6 @@ def save_masks(image_id: int, body=Body(...)):
             raise HTTPException(status_code=404, detail="Image not found")
         # Save each mask
         for mask in masks:
-            print(mask)
             cell_name = next(
                 (cell.name for cell in cells if cell.id == mask["cell_id"]), None
             )
