@@ -1,35 +1,18 @@
 include .env
 export
 
-# Check if we are in a Docker container
-DOCKER ?= false
-
-ifeq ($(DOCKER),true)
-# Use system Python when in Docker
-venv :=
-python := python
-pip := pip
-else
-# Use virtual environment in local development
 venv := .venv
 python := $(venv)/bin/python
 pip := $(venv)/bin/pip
-endif
 
-.PHONY: install dev run freeze lint
+.PHONY: install dev run freeze lint build
 
 install:
-ifeq ($(DOCKER),true)
-	@echo "Installing packages in Docker environment..."
-	@$(pip) install --no-cache-dir -r requirements.txt
-else
 	@echo "Setting up virtual environment..."
 	@[ ! -e $(venv)/bin/python ] && python3 -m venv $(venv) || true
 	@$(pip) install --upgrade pip
-	@$(pip) install ipykernel
-	@$(python) -m ipykernel install --user --name=my-venv --display-name "Python (.venv)"
 	@$(pip) install -r requirements.txt
-endif
+
 
 dev: format
 	@ENV=dev BASE_URL="http://$(HOST):$(PORT_DEV)" $(python) -m uvicorn app.main:app --reload --host $(HOST) --port $(PORT_DEV)
@@ -61,3 +44,11 @@ upgrade:
 	@$(pip) list --outdated --format=freeze | cut -d = -f 1 | xargs -n1 $(pip) install -U
 	@$(pip) freeze > requirements.txt
 	@echo "⬆️ All packages upgraded and requirements.txt updated."
+
+build:
+	@echo "Building binary with Nuitka..."
+	@$(pip) install nuitka
+	@mkdir -p build
+	@$(python) -m nuitka --standalone --onefile --output-dir=build --output-filename=app app/main.py
+	@echo "Building Docker image..."
+	docker build -t crohnscope-backend .

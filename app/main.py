@@ -1,46 +1,15 @@
 from fastapi import FastAPI
 from app.api.routes import ai, cells, image, mask
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from app.db.session import SessionLocal, engine
 from app.db.models import Base, Image, Cell, DiagnosisEnum, Mask
 import os
 from fastapi.middleware.cors import CORSMiddleware
-
-app = FastAPI(
-    title="CrohnScope API",
-    description="API for CrohnScope, a web application for annotating and analyzing medical images.",
-    version="0.1.0",
-    docs_url="/docs",
-    openapi_url="/openapi.json",
-)
+from contextlib import asynccontextmanager
 
 
-# Database configuration
-DATABASE_URL = (
-    "postgresql://postgres:postgres@127.0.0.1:5430/crohnscope"  # TODO: use env vars
-)
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Include routers
-app.include_router(ai.router, prefix="/ai")
-app.include_router(mask.router, prefix="/mask")
-app.include_router(image.router, prefix="/image")
-app.include_router(cells.router, prefix="/cells")
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-@app.on_event("startup")
-def startup():
-    # check if the database is up and running if not, crash the server
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Database connection check and initialization
     try:
         with engine.connect() as connection:
             pass
@@ -52,9 +21,7 @@ def startup():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 
-
-@app.on_event("startup")
-def populate_database():
+    # Populate database
     session = SessionLocal()
     images_path = "data/dataset/images"
     masks_path = "data/dataset/masks"
@@ -93,3 +60,31 @@ def populate_database():
                         session.add(mask)
     session.commit()
     session.close()
+
+    yield
+
+
+app = FastAPI(
+    title="CrohnScope API",
+    description="API for CrohnScope, a web application for annotating and analyzing medical images.",
+    version="0.1.0",
+    docs_url="/docs",
+    openapi_url="/openapi.json",
+    lifespan=lifespan,
+)
+
+
+# Include routers
+app.include_router(ai.router, prefix="/ai")
+app.include_router(mask.router, prefix="/mask")
+app.include_router(image.router, prefix="/image")
+app.include_router(cells.router, prefix="/cells")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
