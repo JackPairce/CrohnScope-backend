@@ -3,14 +3,16 @@ export
 
 venv := .venv
 python := $(venv)/bin/python
-pip := $(venv)/bin/pip
+pip := $(venv)/bin/pip 
 
 .PHONY: install dev run freeze lint build
 
 install:
-	@echo "Setting up virtual environment..."
+	@[ ! -e $(venv)/bin/python ] && echo "Setting up virtual environment..." || true
 	@[ ! -e $(venv)/bin/python ] && python3 -m venv $(venv) || true
+	@echo "Upgrading PIP"
 	@$(pip) install --upgrade pip
+	@echo "Installing Requirements"
 	@$(pip) install -r requirements.txt
 
 
@@ -27,7 +29,7 @@ format:
 	@$(python) -m black app
 
 lint: format
-	@npx openapi-typescript "http://$(HOST):$(PORT)/openapi.json" -o ../frontend/src/api.d.ts
+	@npx openapi-typescript "http://$(HOST):$(PORT_DEV)/openapi.json" -o ../frontend/src/api.d.ts
 	@$(python) -m flake8 app
 
 add:
