@@ -6,6 +6,7 @@ from app.api.routes.cells import get_cells
 from app.db.models import Image, Mask
 from app.db.session import SessionLocal
 from app.types.image import ApiImage, ImageWithMasks, ApiMask
+from app.services.ai.train import start_training_if_needed
 import os
 import shutil
 import numpy as np
@@ -96,26 +97,49 @@ def get_images(
 
 
 @router.post("/upload")
-def upload_image(file: ApiImage = File(...)):
+def upload_image(image_data: ApiImage) -> ApiImage:
     session = SessionLocal()
     try:
         # Get the next image ID
         next_id = get_next_image_id(session)
-        ext = file.filename.split(".")[-1]
-        new_filename = f"{next_id}.{ext}"
-        image_path = os.path.join("data/dataset/images", new_filename)
 
-        # Save the file
-        with open(image_path, "wb") as buffer:
-            base64_image = file.src.split(",")[1]
-            image_data = base64.b64decode(base64_image)
-            buffer.write(image_data)
+        # Validate file extension
+        ext = image_data.filename.split(".")[-1].lower()
+        if ext not in ["jpg", "jpeg", "png"]:
+            raise HTTPException(status_code=400, detail="Invalid file format")
+
+        new_filename = f"{next_id}.{ext}"
+        upload_dir = "data/dataset/images"
+
+        # Ensure directory exists
+        os.makedirs(upload_dir, exist_ok=True)
+        image_path = os.path.join(upload_dir, new_filename)
+
+        try:
+            # Save the file
+            with open(image_path, "wb") as buffer:
+                base64_image = image_data.src.split(",")[1]
+                image_data_bytes = base64.b64decode(base64_image)
+                buffer.write(image_data_bytes)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to save image: {str(e)}"
+            )
 
         # Add to the database
-        image = Image(filename=new_filename)
-        session.add(image)
+        db_image = Image(filename=new_filename)
+        session.add(db_image)
         session.commit()
-        return {"message": "Image uploaded successfully", "id": next_id}
+
+        # Check if training should be triggered
+        start_training_if_needed()
+
+        return ApiImage(
+            id=next_id, filename=new_filename, src=image_data.src, is_done=False
+        )
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         session.close()
 

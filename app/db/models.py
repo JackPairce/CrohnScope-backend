@@ -33,6 +33,7 @@ class Cell(Base):
 
     id = mapped_column(Integer, primary_key=True, index=True)
     name = mapped_column(String, nullable=False, unique=True)
+    description = mapped_column(Text, nullable=True)
 
     masks = relationship("Mask", back_populates="cell")
 

@@ -8,6 +8,7 @@ from app.db.models import Image, Mask
 from app.db.session import SessionLocal
 from app.services.image import mask
 from app.types.image import ApiMask
+from app.services.image.mask_tracker import record_mask_modification
 import os
 import base64
 
@@ -29,6 +30,7 @@ def get_masks(image_id: int) -> List[ApiMask]:
                 mask_path=mask.mask_path,
                 src=ToBase64(mask.mask_path),
                 cell_id=mask.cell_id,
+                is_mask_done=not not (mask.is_mask_done),
             )
             for mask in masks
         ]
@@ -43,8 +45,11 @@ class SaveMaskResponse(TypedDict):
     src: str
 
 
+class ApiSaveMaskResponse(SaveMaskResponse): ...
+
+
 @router.post("/save/{image_id}")
-def save_masks(image_id: int, body=Body(...)):
+def save_masks(image_id: int, body: List[ApiSaveMaskResponse] = Body(...)):
     masks: List[SaveMaskResponse] = body
     session = SessionLocal()
     try:
@@ -73,6 +78,9 @@ def save_masks(image_id: int, body=Body(...)):
             db_mask = session.query(Mask).filter_by(id=mask.get("id")).first()
             if db_mask:
                 db_mask.mask_path = mask_path
+                db_mask.is_mask_done = 0
+                # Record mask modification for AI training
+                record_mask_modification(image_id, mask["cell_id"])
             else:
                 # Add the mask to the database
                 mask_record = Mask(
@@ -96,6 +104,7 @@ def mask_done(mask_id: int):
             db_mask.is_mask_done = 1
         else:
             raise ValueError("the mask is not found")
+        session.commit()
     finally:
         session.close()
 

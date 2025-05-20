@@ -34,3 +34,4 @@ class ImageWithMasks(ApiImage):
 class ApiCell(BaseModel):
     id: int
     name: str
+    description: Optional[str] = None

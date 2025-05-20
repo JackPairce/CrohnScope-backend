@@ -1,10 +1,12 @@
 from fastapi import FastAPI
-from app.api.routes import ai, cells, image, mask
+from app.api.routes import ai, cells, image, mask, monitoring
 from app.db.session import SessionLocal, engine
 from app.db.models import Base, Image, Cell, DiagnosisEnum, Mask
 import os
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from app.services.ai.train import RETRAINING_THRESHOLD, start_training_if_needed
+from app.services.ai.scheduler import scheduler
 
 
 @asynccontextmanager
@@ -63,6 +65,20 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    # # Start the training scheduler for periodic checks
+    # scheduler.start()
+    # print(
+    #     f"AI training will be triggered after every {RETRAINING_THRESHOLD} new images or mask modifications"
+    # )
+
+    # # Initial check for training conditions
+    # start_training_if_needed()
+
+    # yield
+
+    # # Clean up on shutdown
+    # scheduler.stop()
+
 
 app = FastAPI(
     title="CrohnScope API",
@@ -79,12 +95,15 @@ app.include_router(ai.router, prefix="/ai")
 app.include_router(mask.router, prefix="/mask")
 app.include_router(image.router, prefix="/image")
 app.include_router(cells.router, prefix="/cells")
+app.include_router(monitoring.router, prefix="/monitor")
 
-# Add CORS middleware
+# Add CORS middleware with full access for testing
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"],  # Allow all origins in development
+    allow_credentials=True,  # Enable credentials
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],  # Expose all headers
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
