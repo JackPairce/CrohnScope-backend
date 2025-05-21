@@ -33,8 +33,13 @@ async def lifespan(app: FastAPI):
             pass
         logger.info("Database connection successful")
     except Exception as e:
-        logger.error(f"Database connection error: {e}")
-        raise
+        # Log a single line error message without stacktrace
+        error_msg = f"Could not connect to database: {e}"
+        logger.error(error_msg)
+        # Raise a simple exception with a concise message
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=500, detail=error_msg)
 
     # Always initialize fresh database first to ensure all files are processed
     await initialize_fresh_database()
@@ -74,6 +79,7 @@ async def lifespan(app: FastAPI):
 async def initialize_fresh_database():
     """Initialize a fresh database with default data"""
     # Drop all tables and reinitialize the database
+    logger.info("Initializing database schema...")
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     logger.info("Database schema initialized")
@@ -81,10 +87,12 @@ async def initialize_fresh_database():
     # Initialize database with default data
     session = SessionLocal()
     try:
+        logger.info("Starting database initialization with default data...")
         init_database(session)
         logger.info("Database initialized with default data")
 
         # Create initial backup
+        logger.info("Creating initial database backup...")
         if backup := backup_database():
             logger.info(f"Created initial backup at: {backup}")
         else:
