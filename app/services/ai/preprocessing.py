@@ -81,6 +81,7 @@ def create_patches(img, mask, patch_size=256, stride=128):
     y_iterator = tqdm(y_range, desc="Creating patches", leave=False) if total_patches > 20 else y_range
     
     for y in y_iterator:
+        for x in x_range:
             img_patch = img[y : y + patch_size, x : x + patch_size]
             mask_patch = mask[y : y + patch_size, x : x + patch_size]
 
