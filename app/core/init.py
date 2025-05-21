@@ -8,6 +8,7 @@ import json
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.inspection import inspect
+from tqdm import tqdm
 
 
 def serialize_instance(obj):
@@ -40,14 +41,14 @@ def backup_database(backup_dir="data/backups") -> str | None:
     session = SessionLocal()
     try:
         backup_data = {}
-        for table in Base.metadata.sorted_tables:
+        for table in tqdm(Base.metadata.sorted_tables, desc="Backing up tables"):
             model = next(
                 (c for c in Base.__subclasses__() if c.__table__ == table), None
             )
             if model:
                 instances = session.query(model).all()
                 backup_data[table.name] = [
-                    serialize_instance(inst) for inst in instances
+                    serialize_instance(inst) for inst in tqdm(instances, desc=f"Serializing {table.name}", leave=False)
                 ]
 
         with open(backup_file, "w") as f:
@@ -73,17 +74,17 @@ def restore_database(backup_file: str) -> bool:
             backup_data = json.load(f)
 
         # Clear existing data
-        for table in reversed(Base.metadata.sorted_tables):
+        for table in tqdm(reversed(Base.metadata.sorted_tables), desc="Clearing tables"):
             session.execute(table.delete())
 
         # Restore data table by table
-        for table_name, instances in backup_data.items():
+        for table_name, instances in tqdm(backup_data.items(), desc="Restoring tables"):
             model = next(
                 (c for c in Base.__subclasses__() if c.__table__.name == table_name),
                 None,
             )
             if model:
-                for instance_data in instances:
+                for instance_data in tqdm(instances, desc=f"Restoring {table_name}", leave=False):
                     # Filter out any fields that aren't columns
                     valid_columns = {c.key for c in inspect(model).columns}
                     filtered_data = {
@@ -115,7 +116,9 @@ def init_database(
     cell_type_info = []
     if os.path.exists(cell_types_file):
         with open(cell_types_file, "r") as f:
-            for line in f:
+            print("Loading cell types from file...")
+            lines = f.readlines()
+            for line in tqdm(lines, desc="Processing cell types"):
                 line = line.strip()
                 if line and not line.startswith("#"):
                     if "|" in line:
@@ -164,7 +167,8 @@ def init_database(
     cells = session.query(Cell).all()  # Get all cells including existing ones
 
     # Process images
-    for image_file in os.listdir(images_path):
+    image_files = os.listdir(images_path)
+    for image_file in tqdm(image_files, desc="Processing images"):
         image_path = os.path.join(images_path, image_file)
         if os.path.isfile(image_path):
             # Create an Image record
@@ -188,7 +192,7 @@ def init_database(
             if not os.path.exists(image_masks_path):
                 os.makedirs(image_masks_path)
 
-            for cell in cells:
+            for cell in tqdm(cells, desc=f"Processing masks for {image_file}", leave=False):
                 npy_path = os.path.join(image_masks_path, f"{cell.name}.npy")
                 # Check for both .png and .jpg mask files
                 old_mask_paths = [
