@@ -16,6 +16,7 @@ from pathlib import Path
 from app.db.session import SessionLocal
 from app.db.models import Image as DbImage, Mask, Cell
 import gc
+from tqdm import tqdm
 
 
 class PatchDataset(Dataset):
@@ -69,8 +70,17 @@ def create_patches(img, mask, patch_size=256, stride=128):
     img_patches = []
     mask_patches = []
 
-    for y in range(0, h - patch_size + 1, stride):
-        for x in range(0, w - patch_size + 1, stride):
+    # Calculate total patches for progress bar
+    total_patches = ((h - patch_size) // stride + 1) * ((w - patch_size) // stride + 1)
+    # Use tqdm if the image is large enough to warrant a progress bar (more than 20 patches)
+    y_range = range(0, h - patch_size + 1, stride)
+    x_range = range(0, w - patch_size + 1, stride)
+    
+    # Use nested loops with a counter for progress
+    patch_count = 0
+    y_iterator = tqdm(y_range, desc="Creating patches", leave=False) if total_patches > 20 else y_range
+    
+    for y in y_iterator:
             img_patch = img[y : y + patch_size, x : x + patch_size]
             mask_patch = mask[y : y + patch_size, x : x + patch_size]
 
@@ -93,7 +103,7 @@ def load_and_preprocess_data(batch_size=8):
     Returns:
         dataloader: PyTorch DataLoader object
     """
-    from app.api.routes.image import get_images_by_done_status
+    from app.services.image.image_service import get_images_by_done_status
     from app.services.ai.train import training_status, status_lock, check_memory
 
     # Check available memory before processing
@@ -129,7 +139,7 @@ def load_and_preprocess_data(batch_size=8):
         )
 
         # Process each image and its masks
-        for i, img_record in enumerate(done_images):
+        for i, img_record in enumerate(tqdm(done_images, desc="Preprocessing images", leave=True)):
             # Update preprocessing progress
             with status_lock:
                 training_status["preprocessing_progress"] = (i / len(done_images)) * 100
@@ -158,7 +168,7 @@ def load_and_preprocess_data(batch_size=8):
                 continue
 
             # Process each mask for this image
-            for mask_record in masks:
+            for mask_record in tqdm(masks, desc=f"Processing masks for {os.path.basename(img_path)}", leave=False):
                 if not os.path.exists(mask_record.mask_path):
                     continue
 
