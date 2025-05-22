@@ -173,6 +173,7 @@ def save_mask_for_cell(
         if db_mask:
             db_mask.mask_path = mask_path
             db_mask.is_mask_done = 0  # Reset done status
+            db_mask.is_annotation_done = 0  # Reset annotation status
 
             # Calculate health status based on region proportions
             total_annotated = np.sum(three_state_mask > 0)
@@ -251,6 +252,27 @@ def mark_mask_done(session: Session, mask_id: int) -> bool:
         raise ValueError("Mask not found")
 
     db_mask.is_mask_done = 1
+    session.commit()
+    return True
+
+
+def mark_mask_annotated(session: Session, mask_id: int) -> bool:
+    """
+    Mark a mask as annotated.
+
+    Args:
+        session: Database session
+        mask_id: ID of the mask to mark as annotated
+    Returns:
+        bool: True if successful
+    Raises:
+        ValueError: If mask not found
+    """
+    db_mask = session.query(Mask).filter_by(id=mask_id).first()
+    if not db_mask:
+        raise ValueError("Mask not found")
+
+    db_mask.is_annotation_done = 1
     session.commit()
     return True
 

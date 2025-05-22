@@ -15,12 +15,12 @@ router = APIRouter()
 
 class CellCreate(BaseModel):
     name: str
-    description: str = None
+    description: str 
 
 
 class CellUpdate(BaseModel):
-    name: str = None
-    description: str = None
+    name: str 
+    description: str 
 
 
 @router.get("/", response_model=List[ApiCell])

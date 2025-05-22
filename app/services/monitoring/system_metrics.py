@@ -13,6 +13,8 @@ import torch
 from datetime import datetime
 from typing import Dict, Optional, List
 from app.types.monitor import (
+    DataDirectoryInfo,
+    DatasetInfo,
     SystemInfo,
     CpuInfo,
     MemoryInfo,
@@ -69,8 +71,8 @@ def get_system_metrics() -> SystemMetrics:
         pass
 
     cpu_info = CpuInfo(
-        physical_cores=psutil.cpu_count(logical=False),
-        total_cores=psutil.cpu_count(logical=True),
+        physical_cores=psutil.cpu_count(logical=False) or 0,
+        total_cores=psutil.cpu_count(logical=True) or 0,
         max_frequency=f"{cpu_freq.max:.2f}Mhz",
         current_frequency=f"{cpu_freq.current:.2f}Mhz",
         usage_per_core=[
@@ -134,27 +136,27 @@ def get_system_info() -> SystemResponse:
         os.makedirs(path, exist_ok=True)
 
     storage_info = StorageInfo(
-        data_directory={
-            "path": "data/",
-            "total_size": get_size(get_dir_size("data/")),
-            "max_size": "5GB",
-            "dataset": {
-                "images": len(
+        data_directory=DataDirectoryInfo(
+            path="data/",
+            total_size=get_size(get_dir_size("data/")),
+            max_size="5GB",
+            dataset=DatasetInfo(
+                images=len(
                     [
                         f
                         for f in os.listdir(images_path)
                         if os.path.isfile(os.path.join(images_path, f))
                     ]
                 ),
-                "masks": len(
+                masks=len(
                     [
                         f
                         for f in os.listdir(masks_path)
                         if os.path.isdir(os.path.join(masks_path, f))
                     ]
                 ),
-            },
-        }
+            ),
+        )
     )
 
     # Disk Information

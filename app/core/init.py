@@ -48,7 +48,10 @@ def backup_database(backup_dir="data/backups") -> str | None:
             if model:
                 instances = session.query(model).all()
                 backup_data[table.name] = [
-                    serialize_instance(inst) for inst in tqdm(instances, desc=f"Serializing {table.name}", leave=False)
+                    serialize_instance(inst)
+                    for inst in tqdm(
+                        instances, desc=f"Serializing {table.name}", leave=False
+                    )
                 ]
 
         with open(backup_file, "w") as f:
@@ -74,7 +77,9 @@ def restore_database(backup_file: str) -> bool:
             backup_data = json.load(f)
 
         # Clear existing data
-        for table in tqdm(reversed(Base.metadata.sorted_tables), desc="Clearing tables"):
+        for table in tqdm(
+            reversed(Base.metadata.sorted_tables), desc="Clearing tables"
+        ):
             session.execute(table.delete())
 
         # Restore data table by table
@@ -84,7 +89,9 @@ def restore_database(backup_file: str) -> bool:
                 None,
             )
             if model:
-                for instance_data in tqdm(instances, desc=f"Restoring {table_name}", leave=False):
+                for instance_data in tqdm(
+                    instances, desc=f"Restoring {table_name}", leave=False
+                ):
                     # Filter out any fields that aren't columns
                     valid_columns = {c.key for c in inspect(model).columns}
                     filtered_data = {
@@ -192,7 +199,9 @@ def init_database(
             if not os.path.exists(image_masks_path):
                 os.makedirs(image_masks_path)
 
-            for cell in tqdm(cells, desc=f"Processing masks for {image_file}", leave=False):
+            for cell in tqdm(
+                cells, desc=f"Processing masks for {image_file}", leave=False
+            ):
                 npy_path = os.path.join(image_masks_path, f"{cell.name}.npy")
                 # Check for both .png and .jpg mask files
                 old_mask_paths = [

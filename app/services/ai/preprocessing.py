@@ -75,11 +75,15 @@ def create_patches(img, mask, patch_size=256, stride=128):
     # Use tqdm if the image is large enough to warrant a progress bar (more than 20 patches)
     y_range = range(0, h - patch_size + 1, stride)
     x_range = range(0, w - patch_size + 1, stride)
-    
+
     # Use nested loops with a counter for progress
     patch_count = 0
-    y_iterator = tqdm(y_range, desc="Creating patches", leave=False) if total_patches > 20 else y_range
-    
+    y_iterator = (
+        tqdm(y_range, desc="Creating patches", leave=False)
+        if total_patches > 20
+        else y_range
+    )
+
     for y in y_iterator:
         for x in x_range:
             img_patch = img[y : y + patch_size, x : x + patch_size]
@@ -140,7 +144,9 @@ def load_and_preprocess_data(batch_size=8):
         )
 
         # Process each image and its masks
-        for i, img_record in enumerate(tqdm(done_images, desc="Preprocessing images", leave=True)):
+        for i, img_record in enumerate(
+            tqdm(done_images, desc="Preprocessing images", leave=True)
+        ):
             # Update preprocessing progress
             with status_lock:
                 training_status["preprocessing_progress"] = (i / len(done_images)) * 100
@@ -169,7 +175,11 @@ def load_and_preprocess_data(batch_size=8):
                 continue
 
             # Process each mask for this image
-            for mask_record in tqdm(masks, desc=f"Processing masks for {os.path.basename(img_path)}", leave=False):
+            for mask_record in tqdm(
+                masks,
+                desc=f"Processing masks for {os.path.basename(img_path)}",
+                leave=False,
+            ):
                 if not os.path.exists(mask_record.mask_path):
                     continue
 

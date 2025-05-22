@@ -29,7 +29,7 @@ format:
 	@$(python) -m black app
 
 lint: format
-	@npx openapi-typescript "http://$(HOST):$(PORT_DEV)/openapi.json" -o ../frontend/src/api.d.ts
+	@npx openapi-typescript "http://$(HOST):$(PORT_DEV)/openapi.json" -o ../frontend/src/lib/api/types.d.ts
 	@$(python) -m flake8 app
 
 add:
