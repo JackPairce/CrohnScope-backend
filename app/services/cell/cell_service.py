@@ -9,7 +9,7 @@ import os
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from app.db.models import Cell, Mask
-from app.types.image import ApiCell
+from app.types.cell import ApiCell
 
 
 def get_all_cells(session: Session) -> List[ApiCell]:
