@@ -90,7 +90,7 @@ def get_masks(session: Session, image_id: int) -> List[ApiMask]:
         except Exception as e:
             print(f"Error getting region stats for mask {mask.id}: {e}")
             region_info = None
-
+        print(mask.is_mask_done)
         api_masks.append(
             ApiMask(
                 id=mask.id,
