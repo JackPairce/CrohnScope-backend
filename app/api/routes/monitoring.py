@@ -6,6 +6,7 @@ Monitoring routes module for handling system monitoring endpoints.
 from fastapi import APIRouter
 from app.services.monitoring import system_metrics
 from app.types.monitor import SystemMetrics, SystemResponse, DataUsageResponse
+from app.types.training import TrainingProcessResponse
 
 router = APIRouter()
 
@@ -26,3 +27,44 @@ def get_data_usage() -> DataUsageResponse:
 def get_system_metrics() -> SystemMetrics:
     """Get real-time system metrics (CPU, Memory, GPU)."""
     return system_metrics.get_system_metrics()
+
+
+@router.get("/training-process", response_model=TrainingProcessResponse)
+def get_training_process_metrics():
+    """Get metrics about the current training process."""
+    from app.services.ai.scheduler import scheduler, PROCESS_INFO_FILE
+    import json
+    import os
+    import psutil
+
+    status = scheduler.get_training_status()
+    result = dict(status)  # Create a copy to modify
+
+    # Add resource usage if process is running
+    if status.get("status") == "running" and status.get("pid"):
+        try:
+            process = psutil.Process(int(status["pid"]))
+            with process.oneshot():
+                cpu_percent = process.cpu_percent(interval=1.0)
+                memory_info = process.memory_info()
+                memory_percent = process.memory_percent()
+                result["resources"] = {
+                    "cpu_percent": cpu_percent,
+                    "memory_mb": memory_info.rss / (1024 * 1024),  # Convert to MB
+                    "memory_percent": memory_percent,
+                }
+        except (psutil.NoSuchProcess, psutil.AccessDenied, ValueError):
+            result["resources"] = {"error": "Process not accessible"}
+
+    # Add log tail if available
+    log_file = "data/models/training.log"
+    if os.path.exists(log_file):
+        try:
+            with open(log_file, "r") as f:
+                log_lines = f.readlines()
+                result["log"] = log_lines[-20:]  # Last 20 lines
+        except Exception as e:
+            result["log_error"] = str(e)
+
+    # Convert to response model
+    return TrainingProcessResponse(**result)
