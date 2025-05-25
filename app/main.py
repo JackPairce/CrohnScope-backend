@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from app.api.routes import ai, cells, image, mask, monitoring
 from app.db.session import SessionLocal, engine
-from app.db.models import Base
+from app.db.models import Base, Image, Cell, Mask, DiagnosisEnum, HealthStatusEnum
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.services.ai.train import RETRAINING_THRESHOLD, start_training_if_needed
@@ -10,18 +10,33 @@ from app.services.ai.scheduler import scheduler
 from app.core.init import init_database, backup_database, restore_database
 import os
 import logging
+import cv2
+import numpy as np
 from typing import Optional
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
 
 def get_latest_backup(backup_dir: str) -> Optional[str]:
-    """Find the most recent backup file in the given directory."""
+    """Find the most recent backup file and manage backup retention.
+    Only keeps the 3 most recent backups."""
     if not os.path.exists(backup_dir):
         return None
+
     backup_files = sorted(
         [f for f in os.listdir(backup_dir) if f.endswith(".json")], reverse=True
     )
+
+    # Remove old backups if we have more than 3
+    if len(backup_files) > 3:
+        for old_file in backup_files[3:]:
+            try:
+                os.remove(os.path.join(backup_dir, old_file))
+                logger.info(f"Removed old backup: {old_file}")
+            except Exception as e:
+                logger.error(f"Failed to remove old backup {old_file}: {e}")
+
     return os.path.join(backup_dir, backup_files[0]) if backup_files else None
 
 
@@ -41,24 +56,25 @@ async def lifespan(app: FastAPI):
 
         raise HTTPException(status_code=500, detail=error_msg)
 
-    # Always initialize fresh database first to ensure all files are processed
-    await initialize_fresh_database()
-    logger.info("Fresh database initialization completed")
-
-    # Then try to restore from backup if exists to get any saved states
+    # First try to restore from backup if exists
     backup_dir = "data/backups"
     latest_backup = get_latest_backup(backup_dir)
 
-    if latest_backup:
-        logger.info(f"Found latest backup: {latest_backup}")
-        if restore_database(latest_backup):
-            logger.info("Database state restored from backup successfully")
-        else:
-            logger.warning(
-                "Failed to restore database state from backup, using fresh initialization"
-            )
+    if latest_backup and restore_database(latest_backup):
+        logger.info("Database state restored from backup successfully")
+        # Check for any new files not in the backup
+        session = SessionLocal()
+        try:
+            if await process_new_files(session):
+                # Create new backup if new files were added
+                if backup := backup_database():
+                    logger.info(f"Created new backup with added files at: {backup}")
+        finally:
+            session.close()
     else:
-        logger.info("No backup found, using fresh initialization")
+        # If no backup or restore failed, initialize fresh database
+        logger.info("No valid backup found, initializing fresh database")
+        await initialize_fresh_database()
 
     # Start the model training scheduler
     scheduler.start()
@@ -99,6 +115,97 @@ async def initialize_fresh_database():
             logger.error("Failed to create initial backup")
     finally:
         session.close()
+
+
+async def process_new_files(session: Session):
+    """Check for new images and masks in the dataset and add them to the database."""
+    logger.info("Checking for new files in dataset...")
+
+    # Get existing images from database
+    existing_images = {img.filename: img for img in session.query(Image).all()}
+    images_path = "data/dataset/images"
+    masks_path = "data/dataset/masks"
+
+    # Get all cell types
+    cells = session.query(Cell).all()
+    new_files_found = False
+
+    # Check for new images
+    for image_file in os.listdir(images_path):
+        if image_file not in existing_images:
+            new_files_found = True
+            image_path = os.path.join(images_path, image_file)
+            if os.path.isfile(image_path):
+                logger.info(f"Found new image: {image_file}")
+                # Create new image record
+                image = Image(
+                    filename=image_file,
+                    img_path=image_path,
+                    diagnosis=DiagnosisEnum.unknown,
+                )
+                session.add(image)
+                session.flush()  # Get the image ID
+
+                # Create mask directory if needed
+                image_masks_path = os.path.join(
+                    masks_path, os.path.splitext(image_file)[0]
+                )
+                if not os.path.exists(image_masks_path):
+                    os.makedirs(image_masks_path)
+
+                # Initialize masks for each cell type
+                for cell in cells:
+                    await init_mask_for_cell(session, image, cell, image_masks_path)
+
+    # Commit changes if new files were found
+    if new_files_found:
+        session.commit()
+        logger.info("New files processed and added to database")
+    else:
+        logger.info("No new files found in dataset")
+
+    return new_files_found
+
+
+async def init_mask_for_cell(
+    session: Session, image: Image, cell: Cell, masks_path: str
+):
+    """Initialize or update mask for a specific cell type."""
+    npy_path = os.path.join(masks_path, f"{cell.name}.npy")
+
+    # Check for existing image-based masks
+    old_mask_paths = [
+        os.path.join(masks_path, f"{cell.name}{ext}")
+        for ext in [".png", ".jpg", ".jpeg"]
+    ]
+    old_mask_path = next((p for p in old_mask_paths if os.path.exists(p)), None)
+
+    if old_mask_path:
+        # Convert old image mask to NPY
+        mask_img = cv2.imread(old_mask_path, cv2.IMREAD_GRAYSCALE)
+        if mask_img is not None:
+            three_state_mask = np.zeros_like(mask_img, dtype=np.uint8)
+            three_state_mask[mask_img > 128] = 1
+            np.save(npy_path, three_state_mask)
+            os.remove(old_mask_path)
+    elif not os.path.exists(npy_path):
+        # Create empty mask if none exists
+        img = cv2.imread(image.img_path)
+        if img is not None:
+            mask_array = np.zeros(img.shape[:2], dtype=np.uint8)
+            np.save(npy_path, mask_array)
+
+    # Create or update mask record
+    mask = session.query(Mask).filter_by(image_id=image.id, cell_id=cell.id).first()
+    if not mask:
+        mask = Mask(
+            image_id=image.id,
+            mask_path=npy_path,
+            cell_id=cell.id,
+            is_mask_done=0,
+            health_status=HealthStatusEnum.unhealthy,
+        )
+        session.add(mask)
 
 
 app = FastAPI(lifespan=lifespan)
