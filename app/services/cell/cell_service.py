@@ -12,6 +12,19 @@ from app.db.models import Cell, Mask
 from app.types.cell import ApiCell
 
 
+def count_cells(session: Session) -> int:
+    """
+    Count the total number of cell types in the database.
+
+    Args:
+        session: Database session
+
+    Returns:
+        Total count of cell types
+    """
+    return session.query(Cell).count()
+
+
 def get_all_cells(session: Session) -> List[ApiCell]:
     """
     Get all cell types in the database.

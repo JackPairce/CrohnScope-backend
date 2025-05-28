@@ -1,6 +1,8 @@
 import base64
 import os
 
+from numpy import ndarray
+
 
 def ToBase64(path: str) -> str:
     """
@@ -12,6 +14,22 @@ def ToBase64(path: str) -> str:
     Returns:
         str: The base64 string of the file.
     """
+
+    with open(path, "rb") as file:
+        mimetype = path.split(".")[-1]
+        base = base64.b64encode(file.read()).decode("utf-8")
+        return f"data:image/{mimetype};base64,{base}"
+def ImageToBase64(buffer: ndarray) -> str:
+    """
+    Convert an image to a base64 string.
+
+    Args:
+        image (ndarray): The image array.
+
+    Returns:
+        str: The base64 string of the image.
+    """
+    return f"data:image/png;base64,{base64.b64encode(buffer).decode('utf-8')}"
 
     with open(path, "rb") as file:
         mimetype = path.split(".")[-1]
