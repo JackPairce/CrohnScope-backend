@@ -10,12 +10,14 @@ import numpy as np
 import cv2
 import json
 import base64
-from typing import List, Optional
+from typing import List, Literal, Optional
 from sqlalchemy.orm import Session
-from app.db.models import Image, Mask, Cell, HealthStatusEnum
+from app.db.models import Image, Mask, Cell, HealthStatusEnum, Patch
+from app.services.image.patch_service import save_image_as_patches
 from app.types.image import ApiMask, SaveMaskResponse, RegionInfo
-from utils.converters import ToBase64, base64_to_file
-from app.services.image.mask_tracker import record_mask_modification
+from utils.converters import ImageToBase64, ToBase64, base64_to_file
+
+# from app.services.image.mask_tracker import record_mask_modification
 from app.services.image import region_service
 
 
@@ -73,7 +75,6 @@ def get_masks(session: Session, image_id: int) -> List[ApiMask]:
 
         # Convert to base64 for API response - black background (0) and white foreground (255)
         _, buffer = cv2.imencode(".png", (mask_array > 0).astype(np.uint8) * 255)
-        mask_data = f"data:image/png;base64,{base64.b64encode(buffer).decode('utf-8')}"
 
         # Get labeled regions info
         try:
@@ -90,13 +91,13 @@ def get_masks(session: Session, image_id: int) -> List[ApiMask]:
         except Exception as e:
             print(f"Error getting region stats for mask {mask.id}: {e}")
             region_info = None
-        print(mask.is_mask_done)
+
         api_masks.append(
             ApiMask(
                 id=mask.id,
                 image_id=mask.image_id,
                 mask_path=mask.mask_path,
-                src=mask_data,
+                src=ImageToBase64(buffer),
                 cell_id=mask.cell_id,
                 is_mask_done=not not (mask.is_mask_done),
                 labeledMask=None,  # No need for colored visualization
@@ -187,7 +188,7 @@ def save_mask_for_cell(
             else:
                 db_mask.health_status = HealthStatusEnum.unhealthy
 
-            record_mask_modification(image_id, cell_id)
+            # record_mask_modification(image_id, cell_id)
         else:
             db_mask = Mask(
                 image_id=image_id,
@@ -229,11 +230,17 @@ def save_masks(session: Session, image_id: int, masks: List[SaveMaskResponse]) -
     # Save each mask
     for mask in masks:
         save_mask_for_cell(session, image_id, mask.cell_id, mask)
+    # delete cooresponding patch with the same image_id
+    session.query(Patch).filter_by(image_id=image_id).delete()
+
+    session.commit()
 
     return True
 
 
-def mark_mask_done(session: Session, mask_id: int) -> bool:
+def mark_mask_done(
+    session: Session, mask_id: int, which: Literal["mask", "annotation"]
+) -> bool:
     """
     Mark a mask as done.
 
@@ -250,29 +257,20 @@ def mark_mask_done(session: Session, mask_id: int) -> bool:
     db_mask = session.query(Mask).filter_by(id=mask_id).first()
     if not db_mask:
         raise ValueError("Mask not found")
+    if which == "mask":
+        db_mask.is_mask_done = 1
+    elif which == "annotation":
+        db_mask.is_annotation_done = 1
+    else:
+        raise ValueError("Invalid which value")
 
-    db_mask.is_mask_done = 1
-    session.commit()
-    return True
+    # save patches for the mask if all masks are done
+    masks = session.query(Mask).filter_by(image_id=db_mask.image_id).all()
+    if all(mask.is_mask_done for mask in masks):
+        image = session.query(Image).filter_by(id=db_mask.image_id).first()
+        if image:
+            save_image_as_patches(image)
 
-
-def mark_mask_annotated(session: Session, mask_id: int) -> bool:
-    """
-    Mark a mask as annotated.
-
-    Args:
-        session: Database session
-        mask_id: ID of the mask to mark as annotated
-    Returns:
-        bool: True if successful
-    Raises:
-        ValueError: If mask not found
-    """
-    db_mask = session.query(Mask).filter_by(id=mask_id).first()
-    if not db_mask:
-        raise ValueError("Mask not found")
-
-    db_mask.is_annotation_done = 1
     session.commit()
     return True
 

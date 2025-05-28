@@ -1,8 +1,29 @@
-from sqlalchemy import Integer, String, Text, ForeignKey, Enum
+from sqlalchemy import Boolean, Float, Integer, String, Text, ForeignKey, Enum
+from sqlalchemy.types import TypeDecorator, LargeBinary
 from sqlalchemy.orm import relationship, declarative_base, mapped_column
 import enum
+import numpy as np
+import io
+
 
 Base = declarative_base()
+
+
+class NumpyArray(TypeDecorator):
+    impl = LargeBinary
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            out = io.BytesIO()
+            np.save(out, value)
+            return out.getvalue()
+        return None
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            inp = io.BytesIO(value)
+            return np.load(inp, allow_pickle=False)
+        return None
 
 
 class DiagnosisEnum(str, enum.Enum):
@@ -68,3 +89,16 @@ class Mask(Base):
 
     image = relationship("Image", back_populates="masks")
     cell = relationship("Cell", back_populates="masks")
+
+
+class Patch(Base):
+    """Database model for storing image and mask patches."""
+
+    __tablename__ = "patches"
+
+    id = mapped_column(Integer, primary_key=True, index=True)
+    image_id = mapped_column(Integer, ForeignKey("images.id"), nullable=False)
+    img_patch = mapped_column(NumpyArray, nullable=False)  # Image patch as numpy array
+    mask_patch = mapped_column(NumpyArray, nullable=False)  # Mask patch as numpy array
+
+    image = relationship("Image")

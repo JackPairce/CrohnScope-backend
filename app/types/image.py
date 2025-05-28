@@ -178,10 +178,6 @@ class SaveMaskResponse(BaseModel):
     src: str  # Base64 encoded mask
 
 
-class ImageWithMasks(ApiImage):
-    masks: List[ApiMask] = []
-
-
 class MaskUpdateResponse(BaseModel):
     """Response model for mask update operations"""
 

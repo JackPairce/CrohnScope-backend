@@ -13,7 +13,6 @@ import time
 import json
 import logging
 import signal
-from pathlib import Path
 from app.services.ai.train import RETRAINING_THRESHOLD, start_training_if_needed
 from app.types.training import ProcessInfo, TrainingStatusEnum
 from typing import Union, Optional
@@ -28,62 +27,66 @@ PROCESS_INFO_FILE = "data/models/training_process.json"
 def training_process_function(process_info_file=PROCESS_INFO_FILE):
     """
     Function to be run in a separate process to handle model training.
-    
+
     Args:
         process_info_file: Path to the file where process info is stored
     """
     # Configure logging for the training process
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[
             logging.FileHandler("data/models/training.log"),
-            logging.StreamHandler()
-        ]
+            logging.StreamHandler(),
+        ],
     )
     process_logger = logging.getLogger("training_process")
-    
+
     # Helper function to update the status file
     def update_status(status, error=None):
         """Update the status of the training process."""
         try:
             # Load current process info
             if os.path.exists(process_info_file):
-                with open(process_info_file, 'r') as f:
+                with open(process_info_file, "r") as f:
                     data = json.load(f)
-                
+
                 # Create ProcessInfo instance, preserving existing data
                 process_info = ProcessInfo(**data)
             else:
-                process_logger.error("Process info file not found, cannot update status")
+                process_logger.error(
+                    "Process info file not found, cannot update status"
+                )
                 return False
-            
+
             # Update status and error if provided
-            process_info.status = TrainingStatusEnum(status) if isinstance(status, str) else status
+            process_info.status = (
+                TrainingStatusEnum(status) if isinstance(status, str) else status
+            )
             process_info.last_update = time.time()
-            
+
             if error is not None:
                 process_info.error = str(error)
-                
+
             # Write back to file atomically
             temp_file = f"{process_info_file}.tmp"
-            with open(temp_file, 'w') as f:
+            with open(temp_file, "w") as f:
                 json.dump(process_info.dict(), f, indent=2)
-                
+
             os.replace(temp_file, process_info_file)
             return True
         except Exception as e:
             process_logger.error(f"Failed to update process status: {e}")
             return False
-    
+
     # Main training execution
     process_logger.info("Training process started")
     try:
         update_status(TrainingStatusEnum.RUNNING)
-        
+
         # Run the actual training
         result = start_training_if_needed()
-        
+
         if result:
             update_status(TrainingStatusEnum.COMPLETED)
             process_logger.info("Training completed successfully")
@@ -96,97 +99,16 @@ def training_process_function(process_info_file=PROCESS_INFO_FILE):
     finally:
         # Ensure we don't leave the process in a running state
         try:
-            with open(process_info_file, 'r') as f:
+            with open(process_info_file, "r") as f:
                 data = json.load(f)
-                
+
             if data.get("status") == TrainingStatusEnum.RUNNING.value:
-                update_status(TrainingStatusEnum.FAILED, error="Process terminated unexpectedly")
+                update_status(
+                    TrainingStatusEnum.FAILED, error="Process terminated unexpectedly"
+                )
         except Exception as e:
             process_logger.error(f"Error in cleanup: {e}")
-            
-        process_logger.info("Training process exiting")
 
-
-# Function to run in a separate process
-def training_process_function(process_info_file=PROCESS_INFO_FILE):
-    """
-    Function to be run in a separate process to handle model training.
-    
-    Args:
-        process_info_file: Path to the file where process info is stored
-    """
-    # Configure logging for the training process
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler("data/models/training.log"),
-            logging.StreamHandler()
-        ]
-    )
-    process_logger = logging.getLogger("training_process")
-    
-    # Helper function to update the status file
-    def update_status(status, error=None):
-        """Update the status of the training process."""
-        try:
-            # Load current process info
-            if os.path.exists(process_info_file):
-                with open(process_info_file, 'r') as f:
-                    data = json.load(f)
-                
-                # Create ProcessInfo instance, preserving existing data
-                process_info = ProcessInfo(**data)
-            else:
-                process_logger.error("Process info file not found, cannot update status")
-                return False
-            
-            # Update status and error if provided
-            process_info.status = TrainingStatusEnum(status) if isinstance(status, str) else status
-            process_info.last_update = time.time()
-            
-            if error is not None:
-                process_info.error = str(error)
-                
-            # Write back to file atomically
-            temp_file = f"{process_info_file}.tmp"
-            with open(temp_file, 'w') as f:
-                json.dump(process_info.dict(), f, indent=2)
-                
-            os.replace(temp_file, process_info_file)
-            return True
-        except Exception as e:
-            process_logger.error(f"Failed to update process status: {e}")
-            return False
-    
-    # Main training execution
-    process_logger.info("Training process started")
-    try:
-        update_status(TrainingStatusEnum.RUNNING)
-        
-        # Run the actual training
-        result = start_training_if_needed()
-        
-        if result:
-            update_status(TrainingStatusEnum.COMPLETED)
-            process_logger.info("Training completed successfully")
-        else:
-            update_status(TrainingStatusEnum.SKIPPED)
-            process_logger.info("Training conditions not met, skipped")
-    except Exception as e:
-        process_logger.error(f"Training failed: {e}")
-        update_status(TrainingStatusEnum.FAILED, error=str(e))
-    finally:
-        # Ensure we don't leave the process in a running state
-        try:
-            with open(process_info_file, 'r') as f:
-                data = json.load(f)
-                
-            if data.get("status") == TrainingStatusEnum.RUNNING.value:
-                update_status(TrainingStatusEnum.FAILED, error="Process terminated unexpectedly")
-        except Exception as e:
-            process_logger.error(f"Error in cleanup: {e}")
-            
         process_logger.info("Training process exiting")
 
 
@@ -213,7 +135,7 @@ class TrainingScheduler:
 
     def _is_training_running(self) -> bool:
         """Check if a training process is currently running.
-        
+
         Returns:
             bool: True if a training process is running, False otherwise
         """
@@ -251,12 +173,13 @@ class TrainingScheduler:
         try:
             # Create and start a new process using multiprocessing
             process = multiprocessing.Process(
-                target=training_process_function, 
-                name="CrohnScope-Training"
+                target=training_process_function, name="CrohnScope-Training"
             )
-            
+
             # Start the process
-            process.daemon = True  # Set as daemon so it terminates when main process ends
+            process.daemon = (
+                True  # Set as daemon so it terminates when main process ends
+            )
             process.start()
 
             # Store process info
@@ -346,10 +269,12 @@ class TrainingScheduler:
             self._process.terminate()
             # Give it a moment to terminate
             self._process.join(timeout=5.0)
-            
+
             # If it's still alive, try to kill it (more forceful)
             if self._process.is_alive():
-                logger.warning("Training process did not terminate gracefully, forcing termination")
+                logger.warning(
+                    "Training process did not terminate gracefully, forcing termination"
+                )
                 try:
                     # On Unix systems, we can send SIGKILL
                     os.kill(self._process.pid, signal.SIGKILL)

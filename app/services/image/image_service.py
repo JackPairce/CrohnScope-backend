@@ -12,8 +12,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.db.models import Image, Mask
 from app.types.image import ApiImage
-from app.services.ai.train import start_training_if_needed
-from utils.converters import ToBase64, base64_to_file
 
 
 def get_next_image_id(session: Session) -> int:
@@ -110,9 +108,6 @@ def upload_image(session: Session, image_data: ApiImage) -> ApiImage:
     session.add(db_image)
     session.commit()
     session.refresh(db_image)
-
-    # Check if training should be triggered
-    start_training_if_needed()
 
     return ApiImage(
         id=db_image.id, filename=new_filename, src=image_data.src, is_done=False

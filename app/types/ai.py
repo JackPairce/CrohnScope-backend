@@ -1,4 +1,5 @@
-from typing import Optional
+from typing import Literal, Optional, TypedDict
+from numpy import ndarray
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -54,3 +55,22 @@ class MaskGenerationResponse(BaseModel):
 
     message: str
     status: str
+
+
+type WhichModel = Literal["unet", "yolo"]
+
+
+class ImageWithMasks(TypedDict):
+    image: ndarray
+    masks: ndarray
+    cell_id: int
+    is_done: bool
+
+
+class PatchData(TypedDict):
+    """Data model for patch information"""
+
+    img_patch: ndarray
+    mask_patch: ndarray
+    cell_id: int
+    is_done: bool
