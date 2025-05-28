@@ -107,10 +107,12 @@ def save_image_as_patches(
             f"Image Patch Shape: {patched_images.shape}, "
             f"Mask Patch Shape: {patched_masks.shape}"
         )
-
+    # delete existing patches for this image
+    session.query(Patch).filter_by(image_id=image.id).delete()
+    session.commit()
+    
     for img_patch, mask_patch in zip(patched_images, patched_masks):
         # Save patch in database (delete existing patch if exists)
-        session.query(Patch).filter_by(image_id=image.id).delete()
         for agm_img_patch, agm_mask_patch in zip(DataAugmentation(img_patch), DataAugmentation(mask_patch)):
             session.add(
                 Patch(

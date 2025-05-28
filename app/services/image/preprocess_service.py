@@ -110,21 +110,43 @@ def DataAugmentation(patch: np.ndarray) -> List[np.ndarray]:
     Returns:
         List of augmented image patches.
     """
-    augmented_patches = [patch]
+    augmented_patches = []
     
     # apply Flipping Augmentation
+    # Horizontal Flip Augmentation
     flipped_patch = np.flipud(patch)
     augmented_patches.append(flipped_patch)
-    
+    # Vertical Flip Augmentation
+    flipped_patch = np.fliplr(patch)
+    augmented_patches.append(flipped_patch)
+    # Horizontal and Vertical Flip Augmentation
+    flipped_patch = np.flipud(np.fliplr(patch))
+    augmented_patches.append(flipped_patch)    
+
     # apply Orientation Augmentation
     for angle in [0, 90, 180, 270]:
         rotated_patch = np.rot90(patch, k=angle // 90)
         augmented_patches.append(rotated_patch)
         
-    # apply Color Jitter Augmentation
-    for brightness in [0.8, 1.0, 1.2]:
+    # apply brightness Augmentation (.8x, 1.2x)
+    for brightness in [0.8, 1.2]:
         jittered_patch = np.clip(patch * brightness, 0, 255).astype(np.uint8)
         augmented_patches.append(jittered_patch)
+        
+    # apply Contrast Augmentation (.8x, 1.2x)
+    for contrast in [0.8, 1.2]:
+        jittered_patch = np.clip(patch * contrast, 0, 255).astype(np.uint8)
+        augmented_patches.append(jittered_patch)
+        
+    # apply noise Augmentation (Gaussian Noise)
+    noise = np.random.normal(0, 25, patch.shape).astype(np.uint8)
+    noisy_patch = cv2.add(patch, noise)
+    augmented_patches.append(noisy_patch)
+    
+    # apply gamma correction Augmentation (0.8, 1.2)
+    for gamma in [0.8, 1.2]:
+        gamma_corrected_patch = np.clip(patch ** gamma, 0, 255).astype(np.uint8)
+        augmented_patches.append(gamma_corrected_patch)
         
     # apply Zoom/Scale Augmentation
     zoomed_patch = cv2.resize(patch, None, fx=1.2, fy=1.2, interpolation=cv2.INTER_LINEAR)
