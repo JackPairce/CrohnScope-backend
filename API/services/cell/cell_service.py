@@ -8,8 +8,12 @@ This module handles cell CRUD operations and related business logic.
 import os
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from app.db.models import Cell, Mask
-from app.types.cell import ApiCell
+from API.db.models import Cell, Mask
+from shared.types.cell import ApiCell
+
+ToApiCell = lambda cell: ApiCell(
+    id=cell.id, name=cell.name, description=cell.description, img=cell.image
+)
 
 
 def count_cells(session: Session) -> int:
@@ -36,10 +40,7 @@ def get_all_cells(session: Session) -> List[ApiCell]:
         List of ApiCell objects
     """
     cells = session.query(Cell).all()
-    return [
-        ApiCell(id=cell.id, name=cell.name, description=cell.description)
-        for cell in cells
-    ]
+    return [ToApiCell(cell) for cell in cells]
 
 
 def get_cell_by_id(session: Session, cell_id: int) -> Optional[ApiCell]:
@@ -57,7 +58,7 @@ def get_cell_by_id(session: Session, cell_id: int) -> Optional[ApiCell]:
     if not cell:
         return None
 
-    return ApiCell(id=cell.id, name=cell.name, description=cell.description)
+    return ToApiCell(cell)
 
 
 def create_cell(
@@ -87,14 +88,15 @@ def create_cell(
     session.commit()
     session.refresh(db_cell)
 
-    return ApiCell(id=db_cell.id, name=db_cell.name, description=db_cell.description)
+    return ToApiCell(db_cell)
 
 
 def update_cell(
     session: Session,
     cell_id: int,
-    name: Optional[str] = None,
-    description: Optional[str] = None,
+    name: str,
+    description: str,
+    img: str,
 ) -> ApiCell:
     """
     Update an existing cell type.
@@ -115,22 +117,19 @@ def update_cell(
     if not db_cell:
         raise ValueError("Cell not found")
 
-    # Update fields if provided
-    if name is not None:
-        # Check if another cell with the same name exists
-        if name != db_cell.name:
-            existing = session.query(Cell).filter(Cell.name == name).first()
-            if existing:
-                raise ValueError("Cell with this name already exists")
-        db_cell.name = name
-
-    if description is not None:
-        db_cell.description = description
+    # Check if another cell with the same name exists
+    if name != db_cell.name:
+        existing = session.query(Cell).filter(Cell.name == name).first()
+        if existing:
+            raise ValueError("Cell with this name already exists")
+    db_cell.name = name
+    db_cell.description = description
+    db_cell.img = img
 
     session.commit()
     session.refresh(db_cell)
 
-    return ApiCell(id=db_cell.id, name=db_cell.name, description=db_cell.description)
+    return ToApiCell(db_cell)
 
 
 def delete_cell(session: Session, cell_id: int) -> dict:
