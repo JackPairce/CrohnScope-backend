@@ -71,11 +71,20 @@ class ImageListResponse(BaseModel):
     total: int
 
 
+from typing import Literal
+
+
+# (0|1|2)[][]
+type MaskArray = List[
+    List[Literal[0, 1, 2]]
+]  # 0: background, 1: unhealthy cells, 2: healthy cells
+
+
 class MaskBase(BaseModel):
     """Base mask model"""
 
     mask_path: str
-    is_mask_done: bool = False
+    is_segmented: bool = False
     health_status: HealthStatusEnum = HealthStatusEnum.unknown
 
 
@@ -110,9 +119,7 @@ class MaskMatrix(BaseModel):
     labeledRegions: List[
         List[int]
     ]  # Matrix where each cell has a value from 0 (background) to N (regions)
-    mask: List[
-        List[int]
-    ]  # Matrix where 0: background, 1: unhealthy cells, 2: healthy cells
+    mask: MaskArray
 
 
 class MaskMatricesResponse(BaseModel):
@@ -135,8 +142,8 @@ class ApiMask(BaseModel):
     image_id: int
     mask_path: str
     cell_id: Optional[int] = None
-    is_mask_done: bool = False
-    is_annotation_done: bool = False
+    is_segmented: bool = False
+    is_annotated: bool = False
     src: str  # Base64 encoded mask
     labeledMask: Optional[str] = (
         None  # Base64 encoded labeled mask where each region has a unique color
@@ -175,7 +182,7 @@ class SaveMaskResponse(BaseModel):
 
     id: int
     cell_id: int
-    src: str  # Base64 encoded mask
+    data: MaskArray
 
 
 class MaskUpdateResponse(BaseModel):
