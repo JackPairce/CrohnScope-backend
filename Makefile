@@ -1,56 +1,70 @@
 include .env
 export
 
-venv := .venv
-python := $(venv)/bin/python
-pip := $(venv)/bin/pip 
+API_venv := API/.venv
+API_python := $(API_venv)/bin/python
+API_pip := $(API_venv)/bin/pip
 
-.PHONY: install dev run freeze lint build
+AI_venv := AI/.venv
+AI_python := $(AI_venv)/bin/python
+AI_pip := $(AI_venv)/bin/pip
 
-install:
-	@[ ! -e $(venv)/bin/python ] && echo "Setting up virtual environment..." || true
-	@[ ! -e $(venv)/bin/python ] && python3 -m venv $(venv) || true
-	@echo "Upgrading PIP"
-	@$(pip) install --upgrade pip
-	@echo "Installing Requirements"
-	@$(pip) install -r requirements.txt
+.PHONY: install install_api install_ai dev run freeze lint build
+
+install_api:
+	@[ ! -e $(API_venv)/bin/python ] && echo '[API] Setting up virtual environment...' || true
+	@[ ! -e $(API_venv)/bin/python ] && python3 -m venv $(API_venv) || true
+	@echo "[API] Upgrading PIP"
+	@$(API_pip) install --upgrade pip
+	@echo "[API] Installing Requirements"
+	@$(API_pip) install -r API/requirements.txt
+
+install_ai:
+	@[ ! -e $(AI_venv)/bin/python ] && echo '[AI] Setting up virtual environment...' || true
+	@[ ! -e $(AI_venv)/bin/python ] && python3 -m venv $(AI_venv) || true
+	@echo "[AI] Upgrading PIP"
+	@$(AI_pip) install --upgrade pip
+	@echo "[AI] Installing Requirements"
+	@$(AI_pip) install -r AI/requirements.txt
+
+install: install_api install_ai
 
 
 dev: format
-	@ENV=dev BASE_URL="http://$(HOST):$(PORT_DEV)" $(python) -m uvicorn app.main:app --reload --host $(HOST) --port $(PORT_DEV)
+	@ENV=dev BASE_URL="http://$(HOST):$(PORT_DEV)" $(API_python) -m uvicorn API.main:app --reload --host $(HOST) --port $(PORT_DEV)
 
 run:
-	@$(python) -m uvicorn app.main:app --host $(HOST) --port $(PORT)
+	@$(API_python) -m uvicorn API.main:app --host $(HOST) --port $(PORT)
 
 freeze:
-	@$(pip) freeze > requirements.txt
+	@$(API_pip) freeze > API/requirements.txt
 
 format:
-	@$(python) -m black app
+	@$(API_python) -m black API AI
 
 lint: format
 	@npx openapi-typescript "http://$(HOST):$(PORT_DEV)/openapi.json" -o ../frontend/src/lib/api/types.d.ts
-	@$(python) -m flake8 app
+	@$(API_python) -m flake8 app
 
 add:
-	@$(pip) install $(package)
-	@$(pip) freeze > requirements.txt
+	@$(API_pip) install $(package)
+	@$(API_pip) freeze > API/requirements.txt
 	@echo "✅ Package '$(package)' added and requirements.txt updated."
 
 remove:
-	@$(pip) uninstall -y $(package)
-	@$(pip) freeze > requirements.txt
+	@$(API_pip) uninstall -y $(package)
+	@$(API_pip) freeze > API/requirements.txt
 	@echo "🗑️ Package '$(package)' removed and requirements.txt updated."
 
 upgrade:
-	@$(pip) list --outdated --format=freeze | cut -d = -f 1 | xargs -n1 $(pip) install -U
-	@$(pip) freeze > requirements.txt
+	@$(API_pip) list --outdated --format=freeze | cut -d = -f 1 | xargs -n1 $(API_pip) install -U
+	@$(API_pip) freeze > API/requirements.txt
 	@echo "⬆️ All packages upgraded and requirements.txt updated."
 
 build:
 	@echo "Building binary with Nuitka..."
-	@$(pip) install nuitka
+	@$(API_pip) install nuitka
 	@mkdir -p build
-	@$(python) -m nuitka --standalone --onefile --output-dir=build --output-filename=app app/main.py
+	@$(API_python) -m nuitka --standalone --onefile --output-dir=build --output-filename=app app/main.py
 	@echo "Building Docker image..."
 	docker build -t crohnscope-backend .

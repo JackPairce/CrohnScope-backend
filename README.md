@@ -110,7 +110,7 @@ cp .env.example .env
 
 1. Start the server:
 ```bash
-uvicorn app.main:app --reload
+uvicorn API.main:app --reload
 ```
 
 2. Initialize the database (first run):
