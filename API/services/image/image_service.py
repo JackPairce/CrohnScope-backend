@@ -10,8 +10,8 @@ import base64
 from typing import List, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from app.db.models import Image, Mask
-from app.types.image import ApiImage
+from API.db.models import Image, Mask
+from shared.types.image import ApiImage
 
 
 def get_next_image_id(session: Session) -> int:
@@ -39,12 +39,12 @@ def get_images_by_done_status(
 
     if done == 1:
         filtered_query = base_query.having(
-            func.count(Mask.id) > 0, func.count(Mask.id) == func.sum(Mask.is_mask_done)
+            func.count(Mask.id) > 0, func.count(Mask.id) == func.sum(Mask.is_segmented)
         )
     else:
         filtered_query = base_query.having(
             (func.count(Mask.id) == 0)
-            | (func.count(Mask.id) != func.sum(Mask.is_mask_done))
+            | (func.count(Mask.id) != func.sum(Mask.is_segmented))
         )
 
     subquery = filtered_query.subquery()

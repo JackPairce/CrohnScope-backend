@@ -3,16 +3,15 @@ Service for handling image and mask patch operations.
 """
 
 import cv2
-from matplotlib.pylab import f
 import numpy as np
 from pathlib import Path
 from typing import List, Tuple
 from sqlalchemy.orm import Session
 from tqdm import tqdm
-from app.db.models import Image, Mask, Patch
-from app.db.session import SessionLocal
-from app.services.image import region_service
-from app.services.image.preprocess_service import DataAugmentation, normalizeStaining
+from API.db.models import Image, Mask, Patch
+from API.db.session import SessionLocal
+from API.services.image import region_service
+from API.services.image.preprocess_service import DataAugmentation, normalizeStaining
 import math
 
 
@@ -26,6 +25,7 @@ def compute_stride(image_dim: int, patch_dim: int) -> Tuple[int, int]:
     )
     return stride, n_patches
 
+
 def pad_to_size(img, target_size=256):
     """Pad the image to the target size."""
     h, w = img.shape[:2]
@@ -34,7 +34,15 @@ def pad_to_size(img, target_size=256):
     bottom = target_size - h - top
     left = (target_size - w) // 2 if w < target_size else 0
     right = target_size - w - left if w < target_size else 0
-    return cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=0 if c == 1 else [0, 0, 0])
+    return cv2.copyMakeBorder(
+        img,
+        top,
+        bottom,
+        left,
+        right,
+        cv2.BORDER_CONSTANT,
+        value=0 if c == 1 else [0, 0, 0],
+    )
 
 
 def split_image_into_patches(
@@ -47,7 +55,7 @@ def split_image_into_patches(
     image_height, image_width = image.shape[:2]
     stride_x, n_patches_x = compute_stride(image_width, patch_size)
     stride_y, n_patches_y = compute_stride(image_height, patch_size)
-    
+
     patches = []
     positions = []
     for i in range(0, image_height - patch_size + 1, stride_y):
@@ -84,12 +92,7 @@ def save_image_as_patches(
 
     patched_images, *_ = split_image_into_patches(normalized_image, patch_size)
 
-    loaded_masks = np.stack(
-        [
-            np.load(mask.mask_path)
-            for mask in db_masks
-        ]
-    )
+    loaded_masks = np.stack([np.load(mask.mask_path) for mask in db_masks])
     patched_masks = [
         patched_masks
         for patched_masks, *_ in [
@@ -110,10 +113,12 @@ def save_image_as_patches(
     # delete existing patches for this image
     session.query(Patch).filter_by(image_id=image.id).delete()
     session.commit()
-    
+
     for img_patch, mask_patch in zip(patched_images, patched_masks):
         # Save patch in database (delete existing patch if exists)
-        for agm_img_patch, agm_mask_patch in zip(DataAugmentation(img_patch), DataAugmentation(mask_patch)):
+        for agm_img_patch, agm_mask_patch in zip(
+            DataAugmentation(img_patch), DataAugmentation(mask_patch)
+        ):
             session.add(
                 Patch(
                     image_id=image.id,
@@ -122,6 +127,7 @@ def save_image_as_patches(
                 )
             )
     session.commit()
+
 
 def load_patches(
     patch_names: List[str], patches_dir: Path

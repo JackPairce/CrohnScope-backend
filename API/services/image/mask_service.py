@@ -12,13 +12,13 @@ import json
 import base64
 from typing import List, Literal, Optional
 from sqlalchemy.orm import Session
-from app.db.models import Image, Mask, Cell, HealthStatusEnum, Patch
-from app.services.image.patch_service import save_image_as_patches
-from app.types.image import ApiMask, SaveMaskResponse, RegionInfo
-from utils.converters import ImageToBase64, ToBase64, base64_to_file
+from API.db.models import Image, Mask, Cell, HealthStatusEnum, Patch
+from API.services.image.patch_service import save_image_as_patches
+from shared.types.image import ApiMask, SaveMaskResponse, RegionInfo
+from shared.utils.converters import ImageToBase64, ToBase64, base64_to_file
 
-# from app.services.image.mask_tracker import record_mask_modification
-from app.services.image import region_service
+# from API.services.image.mask_tracker import record_mask_modification
+from API.services.image import region_service
 
 
 def get_masks(session: Session, image_id: int) -> List[ApiMask]:
@@ -99,7 +99,7 @@ def get_masks(session: Session, image_id: int) -> List[ApiMask]:
                 mask_path=mask.mask_path,
                 src=ImageToBase64(buffer),
                 cell_id=mask.cell_id,
-                is_mask_done=not not (mask.is_mask_done),
+                is_segmented=not not (mask.is_segmented),
                 labeledMask=None,  # No need for colored visualization
                 regions=region_info,
             )
@@ -142,59 +142,24 @@ def save_mask_for_cell(
         # Define output path for the mask
         mask_path = os.path.join(mask_dir, f"{cell.name}.npy")
 
-        # Convert base64 to numpy array
-        mask_array = region_service.decode_base64_image(mask_data.src)
-
-        # Convert to three-state mask:
-        # 0: background (black)
-        # 1: unhealthy regions (red)
-        # 2: healthy regions (green)
-        three_state_mask = np.zeros(mask_array.shape[:2], dtype=np.uint8)
-
-        # BGR to RGB conversion for OpenCV
-        is_red = (
-            (mask_array[:, :, 2] > 128)
-            & (mask_array[:, :, 1] < 64)
-            & (mask_array[:, :, 0] < 64)
-        )  # Red pixels
-        is_green = (
-            (mask_array[:, :, 1] > 128)
-            & (mask_array[:, :, 2] < 64)
-            & (mask_array[:, :, 0] < 64)
-        )  # Green pixels
-
-        three_state_mask[is_red] = 1  # Unhealthy regions
-        three_state_mask[is_green] = 2  # Healthy regions
+        # Convert to numpy array
+        mask_array = np.array(mask_data.data)
 
         # Save as numpy file
-        np.save(mask_path, three_state_mask)
+        np.save(mask_path, mask_array)
 
         # Update or create the database record
         db_mask = session.query(Mask).filter_by(id=mask_data.id).first()
         if db_mask:
             db_mask.mask_path = mask_path
-            db_mask.is_mask_done = 0  # Reset done status
-            db_mask.is_annotation_done = 0  # Reset annotation status
-
-            # Calculate health status based on region proportions
-            total_annotated = np.sum(three_state_mask > 0)
-            if total_annotated > 0:
-                healthy_ratio = np.sum(three_state_mask == 2) / total_annotated
-                db_mask.health_status = (
-                    HealthStatusEnum.healthy
-                    if healthy_ratio > 0.5
-                    else HealthStatusEnum.unhealthy
-                )
-            else:
-                db_mask.health_status = HealthStatusEnum.unhealthy
-
-            # record_mask_modification(image_id, cell_id)
+            db_mask.is_segmented = 0  # Reset done status
+            db_mask.is_annotated = 0  # Reset annotation status
         else:
             db_mask = Mask(
                 image_id=image_id,
                 mask_path=mask_path,
                 cell_id=cell_id,
-                is_mask_done=0,
+                is_segmented=0,
                 health_status=HealthStatusEnum.unhealthy,
             )
             session.add(db_mask)
@@ -239,7 +204,7 @@ def save_masks(session: Session, image_id: int, masks: List[SaveMaskResponse]) -
 
 
 def mark_mask_done(
-    session: Session, mask_id: int, which: Literal["mask", "annotation"]
+    session: Session, mask_id: int, which: Literal["segmentation", "annotation"]
 ) -> bool:
     """
     Mark a mask as done.
@@ -257,16 +222,16 @@ def mark_mask_done(
     db_mask = session.query(Mask).filter_by(id=mask_id).first()
     if not db_mask:
         raise ValueError("Mask not found")
-    if which == "mask":
-        db_mask.is_mask_done = 1
+    if which == "segmentation":
+        db_mask.is_segmented = 1
     elif which == "annotation":
-        db_mask.is_annotation_done = 1
+        db_mask.is_annotated = 1
     else:
         raise ValueError("Invalid which value")
 
     # save patches for the mask if all masks are done
     masks = session.query(Mask).filter_by(image_id=db_mask.image_id).all()
-    if all(mask.is_mask_done for mask in masks):
+    if all(mask.is_segmented for mask in masks):
         image = session.query(Image).filter_by(id=db_mask.image_id).first()
         if image:
             save_image_as_patches(image)
