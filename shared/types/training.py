@@ -5,7 +5,7 @@ from enum import Enum
 import time
 from torch.utils.data import Dataset, DataLoader
 
-from app.types.ai import PatchData
+from shared.types.ai import PatchData
 import torchvision.transforms as transforms
 
 

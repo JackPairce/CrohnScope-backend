@@ -96,4 +96,5 @@ class UNet(nn.Module):
         d4 = self.dec4(d3, s1)
 
         outputs = self.final_conv(d4)
-        return outputs
+        return torch.sigmoid(outputs)
+

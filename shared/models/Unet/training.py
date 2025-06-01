@@ -3,16 +3,16 @@ from typing import List, Literal
 from torch.nn import BCEWithLogitsLoss
 from torch.optim import Adam, lr_scheduler
 from torch.types import Device
-from app.db.models import Patch
+from API.db.models import Patch
 from torchvision import transforms
-from app.db.session import SessionLocal
-from app.services.ai.Unet.models import UNet
+from API.db.session import SessionLocal
+from shared.models.Unet.models import UNet
 from torch.utils.data import DataLoader, Dataset
 from torch import from_numpy, load, save, sigmoid, no_grad
 import numpy as np
 from tqdm.notebook import tqdm
 
-from app.services.cell.cell_service import count_cells
+from API.services.cell.cell_service import count_cells
 
 
 class PatchDataset(Dataset):
@@ -249,7 +249,7 @@ def validate_model(model, val_loader, device):
             loss = combined_loss(outputs, labels)
             
             # Apply sigmoid and threshold for binary predictions
-            pred = (sigmoid(outputs) > 0.5).float()
+            pred = (outputs > 0.5).float()
             dice = dice_coef(pred, labels)
 
             total_loss += loss.item()

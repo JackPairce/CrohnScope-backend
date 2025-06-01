@@ -7,9 +7,9 @@ using the trained segmentation model.
 
 import os
 from pathlib import Path
-from app.services.ai.predict import predict_mask
-from app.db.models import Image, Cell, Mask
-from app.db.session import SessionLocal
+from API.services.ai.predict import predict_mask
+from API.db.models import Image, Cell, Mask
+from API.db.session import SessionLocal
 
 
 def generate_mask_for_image(image_id, cell_id):
@@ -69,7 +69,7 @@ def generate_mask_for_image(image_id, cell_id):
             image_id=image_id,
             mask_path=mask_path,
             cell_id=cell_id,
-            is_mask_done=0,  # Mark as not done, needs review
+            is_segmented=0,  # Mark as not done, needs review
         )
         session.add(mask)
         session.commit()
