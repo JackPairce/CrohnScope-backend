@@ -12,7 +12,7 @@ import platform
 import torch
 from datetime import datetime
 from typing import Dict, Optional, List
-from app.types.monitor import (
+from shared.types.monitor import (
     DataDirectoryInfo,
     DatasetInfo,
     SystemInfo,
