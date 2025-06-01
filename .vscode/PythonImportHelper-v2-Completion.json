@@ -66,10 +66,10 @@
     },
     {
         "label": "Mask",
-        "importPath": "app.types.image",
-        "description": "app.types.image",
+        "importPath": "shared.types.image",
+        "description": "shared.types.image",
         "isExtraImport": true,
-        "detail": "app.types.image",
+        "detail": "shared.types.image",
         "documentation": {}
     },
     {
@@ -82,107 +82,107 @@
     },
     {
         "label": "ai",
-        "importPath": "app.api.routes",
-        "description": "app.api.routes",
+        "importPath": "API.api.routes",
+        "description": "API.api.routes",
         "isExtraImport": true,
-        "detail": "app.api.routes",
+        "detail": "API.api.routes",
         "documentation": {}
     },
     {
         "label": "data",
-        "importPath": "app.api.routes",
-        "description": "app.api.routes",
+        "importPath": "API.api.routes",
+        "description": "API.api.routes",
         "isExtraImport": true,
-        "detail": "app.api.routes",
+        "detail": "API.api.routes",
         "documentation": {}
     },
     {
         "label": "image",
-        "importPath": "app.api.routes",
-        "description": "app.api.routes",
+        "importPath": "API.api.routes",
+        "description": "API.api.routes",
         "isExtraImport": true,
-        "detail": "app.api.routes",
+        "detail": "API.api.routes",
         "documentation": {}
     },
     {
         "label": "get_model_status",
         "kind": 2,
-        "importPath": "app.api.routes.ai",
-        "description": "app.api.routes.ai",
+        "importPath": "API.api.routes.ai",
+        "description": "API.api.routes.ai",
         "peekOfCode": "def get_model_status():\n    return {\"status\": \"AI model is ready\"}",
-        "detail": "app.api.routes.ai",
+        "detail": "API.api.routes.ai",
         "documentation": {}
     },
     {
         "label": "router",
         "kind": 5,
-        "importPath": "app.api.routes.ai",
-        "description": "app.api.routes.ai",
+        "importPath": "API.api.routes.ai",
+        "description": "API.api.routes.ai",
         "peekOfCode": "router = APIRouter()\n@router.get(\"/status\")\ndef get_model_status():\n    return {\"status\": \"AI model is ready\"}",
-        "detail": "app.api.routes.ai",
+        "detail": "API.api.routes.ai",
         "documentation": {}
     },
     {
         "label": "CellState",
         "kind": 6,
-        "importPath": "app.api.routes.data",
-        "description": "app.api.routes.data",
+        "importPath": "API.api.routes.data",
+        "description": "API.api.routes.data",
         "peekOfCode": "class CellState(Enum):\n    Healthy = \"healthy\"\n    Unhealthy = \"unhealthy\"\n@router.get(\"/status\")\ndef get_model_status():\n    return {\"status\": \"data service is ready\"}",
-        "detail": "app.api.routes.data",
+        "detail": "API.api.routes.data",
         "documentation": {}
     },
     {
         "label": "get_model_status",
         "kind": 2,
-        "importPath": "app.api.routes.data",
-        "description": "app.api.routes.data",
+        "importPath": "API.api.routes.data",
+        "description": "API.api.routes.data",
         "peekOfCode": "def get_model_status():\n    return {\"status\": \"data service is ready\"}",
-        "detail": "app.api.routes.data",
+        "detail": "API.api.routes.data",
         "documentation": {}
     },
     {
         "label": "router",
         "kind": 5,
-        "importPath": "app.api.routes.data",
-        "description": "app.api.routes.data",
+        "importPath": "API.api.routes.data",
+        "description": "API.api.routes.data",
         "peekOfCode": "router = APIRouter()\nclass CellState(Enum):\n    Healthy = \"healthy\"\n    Unhealthy = \"unhealthy\"\n@router.get(\"/status\")\ndef get_model_status():\n    return {\"status\": \"data service is ready\"}",
-        "detail": "app.api.routes.data",
+        "detail": "API.api.routes.data",
         "documentation": {}
     },
     {
         "label": "ConnectedComponents",
         "kind": 2,
-        "importPath": "app.api.routes.image",
-        "description": "app.api.routes.image",
+        "importPath": "API.api.routes.image",
+        "description": "API.api.routes.image",
         "peekOfCode": "def ConnectedComponents(mask: str):\n    print(mask)\n    return mask\n    # binary = cv2.threshold(mask.matrix, 127, 255, cv2.THRESH_BINARY)[1]\n    # _, labels_im = cv2.connectedComponents(binary)\n    # return labels_im.tolist()",
-        "detail": "app.api.routes.image",
+        "detail": "API.api.routes.image",
         "documentation": {}
     },
     {
         "label": "router",
         "kind": 5,
-        "importPath": "app.api.routes.image",
-        "description": "app.api.routes.image",
+        "importPath": "API.api.routes.image",
+        "description": "API.api.routes.image",
         "peekOfCode": "router = APIRouter()\n@router.post(\"/cc\")\ndef ConnectedComponents(mask: str):\n    print(mask)\n    return mask\n    # binary = cv2.threshold(mask.matrix, 127, 255, cv2.THRESH_BINARY)[1]\n    # _, labels_im = cv2.connectedComponents(binary)\n    # return labels_im.tolist()",
-        "detail": "app.api.routes.image",
+        "detail": "API.api.routes.image",
         "documentation": {}
     },
     {
         "label": "Mask",
         "kind": 6,
-        "importPath": "app.types.image",
-        "description": "app.types.image",
+        "importPath": "shared.types.image",
+        "description": "shared.types.image",
         "peekOfCode": "class Mask(BaseModel):\n    matrix: List[List[int]] = []\n    # def __init__(self, array: MatLike):\n    #     self.matrix = array\n    # def tonumpy(self):\n    #     return np.array(self.matrix, dtype=np.uint8)",
-        "detail": "app.types.image",
+        "detail": "shared.types.image",
         "documentation": {}
     },
     {
         "label": "app",
         "kind": 5,
-        "importPath": "app.main",
-        "description": "app.main",
-        "peekOfCode": "app = FastAPI()\napp.include_router(ai.router, prefix=\"/ai\")\napp.include_router(data.router, prefix=\"/data\")\napp.include_router(image.router, prefix=\"/image\")",
-        "detail": "app.main",
+        "importPath": "API.main",
+        "description": "API.main",
+        "peekOfCode": "app = FastAPI()\nAPI.include_router(ai.router, prefix=\"/ai\")\nAPI.include_router(data.router, prefix=\"/data\")\nAPI.include_router(image.router, prefix=\"/image\")",
+        "detail": "API.main",
         "documentation": {}
     }
 ]
