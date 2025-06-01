@@ -1,13 +1,18 @@
-from app.db.session import SessionLocal, engine
-from app.db.models import Base, Image, Cell, DiagnosisEnum, Mask
+from API.db.session import SessionLocal, engine
+from API.db.models import Base, Image, Cell, DiagnosisEnum, Mask, HealthStatusEnum
+from shared.types.cell import CellTypeCSV
 import os
 import cv2
 import numpy as np
 import json
+import pandas as pd
+import base64
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.inspection import inspect
 from tqdm import tqdm
+from sqlalchemy import event
+from typing import List, Optional, Tuple, Dict, Any
 
 
 def serialize_instance(obj):
@@ -110,62 +115,147 @@ def restore_database(backup_file: str) -> bool:
         session.close()
 
 
-def load_cell_types(cell_types_file):
-    """Load cell types from file or create default ones"""
-    cell_type_info = []
+def load_cell_types(
+    cell_types_file: str,
+) -> List[Tuple[str, Optional[str], Optional[str]]]:
+    """Load cell types from CSV file or create default ones"""
+    # Check if old txt file exists and csv doesn't - handle migration
+    old_txt_file = cell_types_file.replace(".csv", ".txt")
+    if os.path.exists(old_txt_file) and not os.path.exists(cell_types_file):
+        print("Migrating from txt to csv format...")
+        cell_type_info = load_cell_types_from_txt(old_txt_file)
+        save_cell_types_to_csv(cell_types_file, cell_type_info)
+        os.rename(old_txt_file, old_txt_file + ".bak")
+        return cell_type_info
+
     if os.path.exists(cell_types_file):
-        with open(cell_types_file, "r") as f:
-            print("Loading cell types from file...")
-            lines = f.readlines()
-            for line in tqdm(lines, desc="Processing cell types"):
-                line = line.strip()
-                if line and not line.startswith("#"):
-                    if "|" in line:
-                        name, description = [x.strip() for x in line.split("|", 1)]
-                        cell_type_info.append((name, description))
-                    else:
-                        cell_type_info.append((line, None))
+        try:
+            print("Loading cell types from CSV file...")
+            df = pd.read_csv(cell_types_file, comment="#")
+            # Filter out rows where name starts with '#' or is empty
+            df = df[df["name"].notna() & ~df["name"].str.startswith("#")]
 
-    if not cell_type_info:
-        cell_type_info = create_default_cell_types(cell_types_file)
+            return [
+                CellTypeCSV(
+                    name=row["name"].strip(),
+                    description=(
+                        row["description"].strip()
+                        if pd.notna(row["description"])
+                        else None
+                    ),
+                    image=row["image"] if pd.notna(row["image"]) else None,
+                ).to_tuple()
+                for _, row in df.iterrows()
+            ]
+        except Exception as e:
+            print(f"Error reading CSV: {e}")
 
+    return create_default_cell_types(cell_types_file)
+
+
+def load_cell_types_from_txt(
+    file_path: str,
+) -> List[Tuple[str, Optional[str], Optional[str]]]:
+    """Legacy loader for txt format"""
+    cell_type_info: List[Tuple[str, Optional[str], Optional[str]]] = []
+    with open(file_path, "r") as f:
+        lines = f.readlines()
+        for line in lines:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                if "|" in line:
+                    name, description = [x.strip() for x in line.split("|", 1)]
+                    cell_type_info.append((name, description, None))
+                else:
+                    cell_type_info.append((line, None, None))
     return cell_type_info
 
 
-def create_default_cell_types(cell_types_file):
+def create_default_cell_types(
+    cell_types_file: str,
+) -> List[Tuple[str, Optional[str], Optional[str]]]:
     """Create default cell types if no file exists"""
     print(f"Warning: {cell_types_file} not found or empty, using default cell types")
     cell_type_info = [
-        (
-            "cryptes",
-            "Crypts of Lieberkühn, also known as intestinal glands, are tubular invaginations in the intestinal epithelium",
-        ),
-        (
-            "granulom",
-            "Granulomas are organized collections of macrophages and other immune cells that form in response to inflammation",
-        ),
+        CellTypeCSV(
+            name="cryptes",
+            description="Crypts of Lieberkühn, also known as intestinal glands, are tubular invaginations in the intestinal epithelium",
+            image=None,
+        ).to_tuple(),
+        CellTypeCSV(
+            name="granulom",
+            description="Granulomas are organized collections of macrophages and other immune cells that form in response to inflammation",
+            image=None,
+        ).to_tuple(),
     ]
-    os.makedirs(os.path.dirname(cell_types_file), exist_ok=True)
-    with open(cell_types_file, "w") as f:
-        f.write(
-            "# Generated by Copilot\n# List of cell types for mask annotation\n# Format: cell_name | description\n"
-        )
-        for name, desc in cell_type_info:
-            f.write(f"{name} | {desc}\n")
+    save_cell_types_to_csv(cell_types_file, cell_type_info)
     return cell_type_info
 
 
-def create_or_update_cells(session, cell_type_info):
+def save_cell_types_to_csv(
+    file_path: str, cell_type_info: List[Tuple[str, Optional[str], Optional[str]]]
+) -> None:
+    """Save cell types to CSV file using pandas"""
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+    # Convert tuples to CellTypeCSV objects for better type safety
+    data = [CellTypeCSV.from_tuple(info).__dict__ for info in cell_type_info]
+    df = pd.DataFrame(data)
+
+    # Add header comment
+    with open(file_path, "w") as f:
+        f.write("# Generated by Copilot\n# List of cell types for mask annotation\n")
+    # Write DataFrame without index
+    df.to_csv(file_path, index=False, mode="a")
+
+
+def export_cells_to_csv(session: Session, file_path: str) -> None:
+    """Export all cells from database to CSV using pandas"""
+    cells = session.query(Cell).all()
+    cell_type_info = []
+
+    for cell in cells:
+        # Convert image to base64 if exists
+        image_b64 = None
+        if hasattr(cell, "image") and cell.image:
+            image_b64 = base64.b64encode(cell.image).decode("utf-8")
+
+        cell_type = CellTypeCSV(
+            name=cell.name, description=cell.description, image=image_b64
+        )
+        cell_type_info.append(cell_type.to_tuple())
+
+    save_cell_types_to_csv(file_path, cell_type_info)
+
+
+# Setup SQLAlchemy event listeners for Cell table changes
+@event.listens_for(Cell, "after_insert")
+@event.listens_for(Cell, "after_update")
+@event.listens_for(Cell, "after_delete")
+def receive_cell_changes(mapper, connection, target):
+    """Handle Cell table changes"""
+    session = SessionLocal()
+    try:
+        export_cells_to_csv(session, "data/cell_types.csv")
+    finally:
+        session.close()
+
+
+def create_or_update_cells(
+    session: Session, cell_type_info: List[Tuple[str, Optional[str], Optional[str]]]
+) -> List[Cell]:
     """Create or update cell records in database"""
-    cells = []
-    for name, description in cell_type_info:
+    cells: List[Cell] = []
+    for name, description, image in cell_type_info:
         cell = session.query(Cell).filter_by(name=name).first()
         if cell:
             if description and cell.description != description:
                 cell.description = description
-                session.add(cell)
+            if image and cell.image != image:
+                cell.image = image
+            session.add(cell)
         else:
-            cell = Cell(name=name, description=description)
+            cell = Cell(name=name, description=description, image=image)
             session.add(cell)
             cells.append(cell)
     if cells:
@@ -235,7 +325,7 @@ def process_image_masks(session, image, cells, image_masks_path, h, w):
                 image_id=image.id,
                 mask_path=mask_path,
                 cell_id=cell.id,
-                is_mask_done=0,
+                is_segmented=0,
                 health_status=HealthStatusEnum.unhealthy,
             )
             session.add(mask)
@@ -276,6 +366,3 @@ def init_database(
 
             process_image_masks(session, image, cells, image_masks_path, h, w)
     session.commit()
-
-
-from app.db.models import HealthStatusEnum

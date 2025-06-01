@@ -53,6 +53,9 @@ class Cell(Base):
     id = mapped_column(Integer, primary_key=True, index=True)
     name = mapped_column(String, nullable=False, unique=True)
     description = mapped_column(Text, nullable=True)
+    image = mapped_column(
+        Text, default="", nullable=True
+    )  # Base64 encoded image string
 
     masks = relationship("Mask", back_populates="cell")
 
@@ -77,8 +80,8 @@ class Mask(Base):
     image_id = mapped_column(Integer, ForeignKey("images.id"), nullable=False)
     mask_path = mapped_column(Text, nullable=False)
     cell_id = mapped_column(Integer, ForeignKey("cells.id"), nullable=True)
-    is_mask_done = mapped_column(Integer, default=0)  # 0 for False, 1 for True
-    is_annotation_done = mapped_column(Integer, default=0)  # 0 for False, 1 for True
+    is_segmented = mapped_column(Integer, default=0)  # 0 for False, 1 for True
+    is_annotated = mapped_column(Integer, default=0)  # 0 for False, 1 for True
     # mask_path stores the .npy file with values:
     # 0: background
     # 1: unhealthy regions

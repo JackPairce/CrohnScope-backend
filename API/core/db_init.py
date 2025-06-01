@@ -6,9 +6,9 @@ import numpy as np
 from typing import Optional, List
 from sqlalchemy.orm import Session
 
-from app.db.models import Base, Image, Cell, Mask, DiagnosisEnum, HealthStatusEnum
-from app.db.session import SessionLocal, engine
-from app.core.init import init_database, backup_database, restore_database
+from API.db.models import Base, Image, Cell, Mask, DiagnosisEnum, HealthStatusEnum
+from API.db.session import SessionLocal, engine
+from API.core.init import init_database, backup_database, restore_database
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +149,7 @@ async def init_mask_for_cell(
             image_id=image.id,
             mask_path=npy_path,
             cell_id=cell.id,
-            is_mask_done=0,
+            is_segmented=0,
             health_status=HealthStatusEnum.unhealthy,
         )
         session.add(mask)
