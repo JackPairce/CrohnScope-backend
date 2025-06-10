@@ -61,9 +61,7 @@ def get_cell_by_id(session: Session, cell_id: int) -> Optional[ApiCell]:
     return ToApiCell(cell)
 
 
-def create_cell(
-    session: Session, name: str, description: Optional[str] = None
-) -> ApiCell:
+def create_cell(session: Session, cell: ApiCell) -> ApiCell:
     """
     Create a new cell type.
 
@@ -79,11 +77,11 @@ def create_cell(
         ValueError: If cell with same name exists
     """
     # Check if a cell with the same name already exists
-    existing = session.query(Cell).filter(Cell.name == name).first()
+    existing = session.query(Cell).filter(Cell.name == cell.name).first()
     if existing:
         raise ValueError("Cell with this name already exists")
 
-    db_cell = Cell(name=name, description=description)
+    db_cell = Cell(name=cell.name, description=cell.description, image=cell.img)
     session.add(db_cell)
     session.commit()
     session.refresh(db_cell)
