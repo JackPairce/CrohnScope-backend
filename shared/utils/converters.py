@@ -19,6 +19,8 @@ def ToBase64(path: str) -> str:
         mimetype = path.split(".")[-1]
         base = base64.b64encode(file.read()).decode("utf-8")
         return f"data:image/{mimetype};base64,{base}"
+
+
 def ImageToBase64(buffer: ndarray) -> str:
     """
     Convert an image to a base64 string.
