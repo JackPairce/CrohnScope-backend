@@ -11,7 +11,7 @@ from shared.types.image import (
     MaskUpdateResponse,
     MaskMatrix,
     MaskMatricesResponse,
-    SaveMaskResponse,
+    MaskSaveRequest,
 )
 from API.services.image import mask_service, health_service
 
@@ -34,7 +34,7 @@ def get_masks(image_id: int) -> List[ApiMask]:
 
 
 @router.post("/save/{image_id}")
-def save_masks(image_id: int, body: List[SaveMaskResponse] = Body(...)):
+def save_masks(image_id: int, body: List[MaskSaveRequest] = Body(...)):
     """
     Save masks for an image.
 

@@ -51,19 +51,19 @@ def get_cell(cell_id: int) -> ApiCell:
 
 
 @router.post("/save/{image_id}", response_model=CellTypeCreateResponse)
-def add_cell(name: str) -> CellTypeCreateResponse:
+def add_cell(inCell: ApiCell) -> CellTypeCreateResponse:
     """Legacy method for compatibility with existing code."""
     session = SessionLocal()
     try:
         try:
-            cell = cell_service.create_cell(session, name)
+            cell = cell_service.create_cell(session, inCell)
             return CellTypeCreateResponse(
                 message="Cell added successfully", cell_type=cell
             )
         except ValueError:
             # If cell already exists, return it
             existing = cell_service.get_all_cells(session)
-            cell = next((c for c in existing if c.name == name), None)
+            cell = next((c for c in existing if c.name == inCell.name), None)
             if cell:
                 return CellTypeCreateResponse(
                     message="Cell already exists", cell_type=cell

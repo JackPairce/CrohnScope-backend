@@ -6,11 +6,18 @@ Image routes module for handling image-related HTTP endpoints.
 from typing import Literal, Optional
 from fastapi import APIRouter, HTTPException, Query
 from API.db.session import SessionLocal
-from shared.types.image import ApiImage, ImageStatus, ImageListResponse
+from shared.types.image import (
+    ApiImage,
+    ImageStatus,
+    ImageListResponse,
+    UploadImageRequest,
+    process_type,
+)
 from API.services.image import image_service
 from shared.utils.converters import ToBase64
 
 router = APIRouter()
+PAGE_SIZE = 10
 
 
 @router.get("/status", response_model=ImageStatus)
@@ -20,8 +27,44 @@ def get_status() -> ImageStatus:
 
 
 @router.get("/all/{page}", response_model=ImageListResponse)
+def get_images_all(page: int) -> ImageListResponse:
+    """
+    Get a paginated list of all images.
+
+    Args:
+        page: Page number
+    """
+    session = SessionLocal()
+    try:
+        db_images_count = session.query(image_service.Image).count()
+        db_images = (
+            session.query(image_service.Image)
+            .offset((page - 1) * PAGE_SIZE)
+            .limit(PAGE_SIZE)
+            .all()
+        )
+        return ImageListResponse(
+            images=[
+                ApiImage(
+                    id=img.id,
+                    filename=img.filename,
+                    src=ToBase64(img.img_path),
+                    is_done=False,  # Default to False, can be updated later
+                )
+                for img in db_images
+            ],
+            page=page,
+            total=db_images_count,
+        )
+    finally:
+        session.close()
+
+
+@router.get("/which_all/{page}", response_model=ImageListResponse)
 def get_images(
-    page: int, done: Optional[Literal["0", "1"]] = Query(None)
+    page: int,
+    which: process_type = Query(),
+    done: Optional[Literal["0", "1"]] = Query(None),
 ) -> ImageListResponse:
     """
     Get a paginated list of images.
@@ -32,12 +75,12 @@ def get_images(
     """
     session = SessionLocal()
     try:
-        page_size = 10
         db_images, db_count = image_service.get_images_by_done_status(
             session,
             (int(done) if done else 0),
-            offset=(page - 1) * page_size,
-            limit=page_size,
+            which,
+            offset=(page - 1) * PAGE_SIZE,
+            limit=PAGE_SIZE,
         )
 
         api_images = [
@@ -54,8 +97,8 @@ def get_images(
         session.close()
 
 
-@router.post("/upload")
-def upload_image(image_data: ApiImage) -> ApiImage:
+@router.post("/upload", response_model=ApiImage)
+def upload_image(image_data: UploadImageRequest) -> ApiImage:
     """Upload a new image."""
     session = SessionLocal()
     try:
