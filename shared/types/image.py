@@ -63,6 +63,12 @@ class ApiImage(BaseModel):
     is_done: bool = False  # If the user has finished annotating the image
 
 
+class UploadImageRequest(BaseModel):
+    """Request model for uploading an image"""
+
+    base64_data: str  # Base64 encoded image data
+
+
 class ImageListResponse(BaseModel):
     """Response model for paginated image list"""
 
@@ -78,6 +84,8 @@ from typing import Literal
 type MaskArray = List[
     List[Literal[0, 1, 2]]
 ]  # 0: background, 1: unhealthy cells, 2: healthy cells
+
+type process_type = Literal["segmentation", "annotation"]
 
 
 class MaskBase(BaseModel):
@@ -140,14 +148,10 @@ class ApiMask(BaseModel):
 
     id: int
     image_id: int
-    mask_path: str
     cell_id: Optional[int] = None
     is_segmented: bool = False
     is_annotated: bool = False
     src: str  # Base64 encoded mask
-    labeledMask: Optional[str] = (
-        None  # Base64 encoded labeled mask where each region has a unique color
-    )
     regions: Optional[List[RegionInfo]] = None  # List of region statistics
 
 
@@ -177,8 +181,8 @@ class MaskResponse(BaseModel):
 from pydantic import BaseModel
 
 
-class SaveMaskResponse(BaseModel):
-    """Model for mask saving response."""
+class MaskSaveRequest(BaseModel):
+    """Model for mask saving request."""
 
     id: int
     cell_id: int

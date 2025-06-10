@@ -162,6 +162,20 @@ def DataAugmentation(patch: np.ndarray) -> List[np.ndarray]:
     return augmented_patches
 
 
+def Sharpening(patch: np.ndarray) -> np.ndarray:
+    """Apply sharpening to the image patch.
+
+    Args:
+        patch: Image patch to sharpen.
+
+    Returns:
+        Sharpened image patch.
+    """
+    kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+    sharpened_patch = cv2.filter2D(patch, -1, kernel)
+    return sharpened_patch
+
+
 def QualityControl():
     # TODO: Implement quality control checks for the image preprocessing
     ...
