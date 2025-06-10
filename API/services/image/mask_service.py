@@ -8,20 +8,20 @@ This module handles mask CRUD operations and related business logic.
 import os
 import numpy as np
 import cv2
-import json
-import base64
-from typing import List, Literal, Optional
+from typing import List
 from sqlalchemy.orm import Session
-from API.db.models import Image, Mask, Cell, HealthStatusEnum, Patch
+from API.db.models import Image, Mask, Cell, HealthStatusEnum
 from API.services.image.patch_service import save_image_as_patches
-from shared.types.image import ApiMask, SaveMaskResponse, RegionInfo
-from shared.utils.converters import ImageToBase64, ToBase64, base64_to_file
+from shared.types.image import ApiMask, MaskSaveRequest, RegionInfo, process_type
+from shared.utils.converters import ImageToBase64, ToBase64
 
 # from API.services.image.mask_tracker import record_mask_modification
 from API.services.image import region_service
 
 
-def get_masks(session: Session, image_id: int) -> List[ApiMask]:
+def get_masks(
+    session: Session, image_id: int, withRegion: bool = False
+) -> List[ApiMask]:
     """
     Get all masks for an image. For each mask:
     - If it's a .npy file, load it as a matrix where:
@@ -64,43 +64,37 @@ def get_masks(session: Session, image_id: int) -> List[ApiMask]:
                 continue  # Skip if neither file exists        # Load the mask from npy file
         mask_array = np.load(npy_path, allow_pickle=True)
 
-        # Get connected regions and their health status
-        _, labels = cv2.connectedComponents((mask_array > 0).astype(np.uint8))
-
-        # Use the mask file's values directly:
-        # 0: background
-        # 1: unhealthy regions
-        # 2: healthy regions
-        # No need to use region_statuses anymore since health is stored in the mask values
-
         # Convert to base64 for API response - black background (0) and white foreground (255)
         _, buffer = cv2.imencode(".png", (mask_array > 0).astype(np.uint8) * 255)
 
-        # Get labeled regions info
-        try:
-            _, regions = region_service.get_region_stats(labels)
-            region_info = [
-                RegionInfo(
-                    id=r["id"],
-                    area=r["area"],
-                    boundingBox=r["boundingBox"],
-                    centroid=r["centroid"],
-                )
-                for r in regions
-            ]
-        except Exception as e:
-            print(f"Error getting region stats for mask {mask.id}: {e}")
-            region_info = None
+        region_info = None
+        if withRegion:
+            # Get labeled regions info
+            try:
+                # Get connected regions and their health status
+                _, labels = cv2.connectedComponents((mask_array > 0).astype(np.uint8))
+
+                _, regions = region_service.get_region_stats(labels)
+                region_info = [
+                    RegionInfo(
+                        id=r["id"],
+                        area=r["area"],
+                        boundingBox=r["boundingBox"],
+                        centroid=r["centroid"],
+                    )
+                    for r in regions
+                ]
+            except Exception as e:
+                print(f"Error getting region stats for mask {mask.id}: {e}")
+                region_info = None
 
         api_masks.append(
             ApiMask(
                 id=mask.id,
                 image_id=mask.image_id,
-                mask_path=mask.mask_path,
                 src=ImageToBase64(buffer),
                 cell_id=mask.cell_id,
                 is_segmented=not not (mask.is_segmented),
-                labeledMask=None,  # No need for colored visualization
                 regions=region_info,
             )
         )
@@ -109,7 +103,7 @@ def get_masks(session: Session, image_id: int) -> List[ApiMask]:
 
 
 def save_mask_for_cell(
-    session: Session, image_id: int, cell_id: int, mask_data: SaveMaskResponse
+    session: Session, image_id: int, cell_id: int, mask_data: MaskSaveRequest
 ) -> bool:
     """Save a mask for a specific cell type.
 
@@ -172,7 +166,7 @@ def save_mask_for_cell(
         return False
 
 
-def save_masks(session: Session, image_id: int, masks: List[SaveMaskResponse]) -> bool:
+def save_masks(session: Session, image_id: int, masks: List[MaskSaveRequest]) -> bool:
     """
     Save multiple masks for an image.
 
@@ -195,17 +189,13 @@ def save_masks(session: Session, image_id: int, masks: List[SaveMaskResponse]) -
     # Save each mask
     for mask in masks:
         save_mask_for_cell(session, image_id, mask.cell_id, mask)
-    # delete cooresponding patch with the same image_id
-    session.query(Patch).filter_by(image_id=image_id).delete()
 
     session.commit()
 
     return True
 
 
-def mark_mask_done(
-    session: Session, mask_id: int, which: Literal["segmentation", "annotation"]
-) -> bool:
+def mark_mask_done(session: Session, mask_id: int, which: process_type) -> bool:
     """
     Mark a mask as done.
 
